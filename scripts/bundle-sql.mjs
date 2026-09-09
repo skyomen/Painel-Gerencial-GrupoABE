@@ -18,6 +18,7 @@ const PARTES = [
   ['013_agregados_dashboard.sql', 'AS TABELAS — agregados do dashboard + RLS + recálculo incremental'],
   ['014_alinhar_calcular_metricas.sql', 'A RPC — calcular_metricas_credor reescrita sobre a view'],
   ['015_agregado_por_classe.sql', 'AS CLASSES — acordos e baixas por categoria, para a tela da diretoria'],
+  ['016_refresh_todos.sql', 'O BOTÃO — recálculo de todos os credores numa chamada só'],
 ];
 
 const hoje = new Date().toISOString().slice(0, 10);

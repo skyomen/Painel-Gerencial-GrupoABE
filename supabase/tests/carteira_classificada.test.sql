@@ -80,6 +80,7 @@ INSERT INTO public.credores VALUES
 \ir ../migrations/013_agregados_dashboard.sql
 \ir ../migrations/014_alinhar_calcular_metricas.sql
 \ir ../migrations/015_agregado_por_classe.sql
+\ir ../migrations/016_refresh_todos.sql
 
 -- ---------------------------------------------------------------------------
 -- Cada linha existe para exercitar um ramo da classificação.
@@ -261,6 +262,31 @@ BEGIN
   ASSERT v = 200, 'saldo do acordo com pagamento (P2): ' || v;
 
   RAISE NOTICE 'OK  classes por categoria';
+END $$;
+
+
+-- ---------------------------------------------------------------------------
+-- 6. O botao do painel: recalcular todos numa chamada so.
+-- ---------------------------------------------------------------------------
+DO $$
+DECLARE r RECORD; v NUMERIC;
+BEGIN
+  -- Zera os agregados para provar que o recalculo realmente os refaz.
+  DELETE FROM public.metricas_mensais_bordero;
+  DELETE FROM public.metricas_mensais_repasse;
+  DELETE FROM public.metricas_posicao;
+  DELETE FROM public.metricas_mensais_classe;
+  DELETE FROM public.metricas_mensais_faixa;
+
+  SELECT * INTO r FROM public.refresh_agregados_todos();
+
+  ASSERT r.credores_recalculados = 1, 'credores recalculados: ' || r.credores_recalculados;
+
+  SELECT SUM(bordero_valor) INTO v FROM public.metricas_mensais_bordero
+   WHERE competencia = '2026-03-01';
+  ASSERT v = 4700, 'agregado nao foi refeito pelo botao: ' || COALESCE(v::text, 'nulo');
+
+  RAISE NOTICE 'OK  recalculo de todos numa chamada';
 END $$;
 
 SELECT 'TODOS OS TESTES PASSARAM' AS resultado;

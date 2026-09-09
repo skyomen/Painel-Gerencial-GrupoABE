@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Plus } from 'lucide-react';
 import { CredoresTable } from '@/components/admin/credores-table';
+import { BotaoSync } from '@/components/admin/botao-sync';
 import { KpiSection } from '@/components/dashboard/kpi-section';
 import { listCredores, type Credor } from '@/lib/admin-api';
 import { toApiError } from '@/lib/api-client';
@@ -78,13 +79,16 @@ export default function CredoresPage() {
               Códigos em primeiro · busca por nome, CNPJ ou código · filtros por responsável.
             </p>
           </div>
-          <Link
-            href="/admin/credores/novo"
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-soft transition-opacity hover:opacity-90"
-          >
-            <Plus className="h-4 w-4" />
-            Novo credor
-          </Link>
+          <div className="flex flex-wrap items-start gap-3">
+            <BotaoSync onConcluido={carregar} />
+            <Link
+              href="/admin/credores/novo"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-soft transition-opacity hover:opacity-90"
+            >
+              <Plus className="h-4 w-4" />
+              Novo credor
+            </Link>
+          </div>
         </div>
 
         <CredoresTable credores={credores} />

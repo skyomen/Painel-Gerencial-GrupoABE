@@ -15,6 +15,7 @@ import {
 } from '@/components/dashboard/charts/periodo-charts';
 import { AcordosTable, BaixasTable } from '@/components/dashboard/detail-tables';
 import { FiltrosDiretoria } from '@/components/diretoria/filtros-diretoria';
+import { BotaoSync } from '@/components/admin/botao-sync';
 import type { DiretoriaFiltros, DiretoriaResponse } from '@/lib/diretoria-types';
 
 /**
@@ -108,7 +109,10 @@ export default function DiretoriaPage() {
             )}
           </p>
         </div>
-        {buscando && <span className="text-xs text-muted-foreground">Atualizando…</span>}
+        <div className="flex items-center gap-3">
+          {buscando && <span className="text-xs text-muted-foreground">Atualizando…</span>}
+          <BotaoSync onConcluido={() => carregar(filtrosBusca)} />
+        </div>
       </div>
 
       <FiltrosDiretoria

@@ -2,6 +2,7 @@
 
 import { Building2, Calendar, Filter, MapPin } from 'lucide-react';
 import type { DiretoriaCredorOpcao, DiretoriaFiltros } from '@/lib/diretoria-types';
+import { SelecaoCredores } from '@/components/diretoria/selecao-credores';
 
 /**
  * Filtros da diretoria. O de credor é o que diferencia esta tela da do credor:
@@ -26,26 +27,21 @@ export function FiltrosDiretoria({
         <Filter className="h-4 w-4 text-primary" />
         <h2 className="text-sm font-semibold text-foreground">Filtros</h2>
         <span className="text-xs text-muted-foreground">
-          {filtros.credorId ? 'Mostrando um credor' : `Somando ${credores.length} credores`}
+          {filtros.credorIds.length === 0
+            ? `Somando ${credores.length} credores`
+            : filtros.credorIds.length === 1
+              ? 'Mostrando 1 credor'
+              : `Somando ${filtros.credorIds.length} de ${credores.length} credores`}
         </span>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Campo label="Credor" icon={Building2}>
-          <select
-            value={filtros.credorId ?? 'todos'}
-            onChange={(e) =>
-              onChange({ credorId: e.target.value === 'todos' ? null : e.target.value })
-            }
-            className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
-          >
-            <option value="todos">Todos os credores</option>
-            {credores.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.razaoSocial}
-              </option>
-            ))}
-          </select>
+          <SelecaoCredores
+            credores={credores}
+            selecionados={filtros.credorIds}
+            onChange={(credorIds) => onChange({ credorIds })}
+          />
         </Campo>
 
         <Campo label="Data inicial" icon={Calendar}>

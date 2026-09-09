@@ -33,7 +33,7 @@ function periodoPadrao(): { de: string; ate: string } {
 
 export default function DiretoriaPage() {
   const [filtros, setFiltros] = useState<DiretoriaFiltros>({
-    credorId: null,
+    credorIds: [],
     uf: 'todos',
     ...periodoPadrao(),
   });
@@ -50,7 +50,9 @@ export default function DiretoriaPage() {
     setBuscando(true);
 
     const params = new URLSearchParams({ uf: f.uf, de: f.de, ate: f.ate });
-    if (f.credorId) params.set('credorId', f.credorId);
+    // Repetido, não separado por vírgula: razão social não entra na URL, mas
+    // o formato repetido é o que o URLSearchParams devolve sem ambiguidade.
+    for (const id of f.credorIds) params.append('credorIds', id);
 
     try {
       setResposta(await apiFetch<DiretoriaResponse>(`/diretoria?${params.toString()}`));
@@ -86,19 +88,27 @@ export default function DiretoriaPage() {
   }
 
   const dados = resposta?.payload ?? EMPTY_DASHBOARD_PAYLOAD;
-  const credorEscolhido = resposta?.credores.find((c) => c.id === filtros.credorId);
+  const escolhidos = resposta?.credores.filter((c) => filtros.credorIds.includes(c.id)) ?? [];
 
   return (
     <>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="font-display text-base font-semibold text-foreground">
-            {credorEscolhido ? credorEscolhido.razaoSocial : 'Todos os credores'}
+            {escolhidos.length === 0
+              ? 'Todos os credores'
+              : escolhidos.length === 1
+                ? escolhidos[0]!.razaoSocial
+                : `${escolhidos.length} credores selecionados`}
           </h2>
           <p className="text-xs text-muted-foreground">
-            {credorEscolhido
-              ? 'Recorte de um credor — os mesmos indicadores do painel dele'
-              : 'Soma de todos os credores sincronizados'}
+            {escolhidos.length === 0
+              ? 'Soma de todos os credores sincronizados'
+              : escolhidos.length === 1
+                ? 'Recorte de um credor — os mesmos indicadores do painel dele'
+                : // Nomear quem entrou na conta: um total sem a lista deixa a
+                  // dúvida sobre quais credores foram somados.
+                  `Somando: ${escolhidos.map((c) => c.razaoSocial).join(', ')}`}
             {resposta?.maisAntigoSincronizadoEm && (
               <>
                 {' · '}

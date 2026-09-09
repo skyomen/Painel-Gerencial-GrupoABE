@@ -123,8 +123,8 @@ describe('montarKpis', () => {
 });
 
 describe('filtrar', () => {
-  it('por credor isola um só, em todas as tabelas', () => {
-    const so1 = filtrar(ag, { credorId: 'c1' });
+  it('um credor isola, em todas as tabelas', () => {
+    const so1 = filtrar(ag, { credorIds: ['c1'] });
     assert.equal(so1.bordero.length, 1);
     assert.equal(so1.repasse.length, 1);
     assert.equal(so1.posicao.length, 1);
@@ -134,9 +134,34 @@ describe('filtrar', () => {
     assert.match(k.kpiBordero[0]!.valor, /10\.000,00/);
   });
 
-  it('sem credorId, consolida todos', () => {
-    const todos = filtrar(ag, {});
+  it('dois credores somam os dois, e só eles', () => {
+    const dois = filtrar(ag, { credorIds: ['c1', 'c2'] });
+    const k = montarKpis(dois);
+    assert.match(k.kpiBordero[0]!.valor, /12\.000,00/, 'soma de c1 (10.000) e c2 (2.000)');
+    assert.equal(k.kpiBordero[1]!.valor, '110');
+  });
+
+  it('credor inexistente na lista não traz linha nenhuma', () => {
+    const nada = filtrar(ag, { credorIds: ['nao-existe'] });
+    assert.equal(nada.bordero.length, 0);
+    assert.equal(nada.posicao.length, 0);
+  });
+
+  it('lista VAZIA consolida todos — não zera a tela', () => {
+    // Desmarcar o último credor devolve ao consolidado. "Nenhum credor" não é
+    // uma escolha que alguém faça de propósito.
+    const todos = filtrar(ag, { credorIds: [] });
     assert.equal(todos.bordero.length, 2);
+  });
+
+  it('sem o campo, consolida todos', () => {
+    assert.equal(filtrar(ag, {}).bordero.length, 2);
+  });
+
+  it('id repetido não duplica a soma', () => {
+    const repetido = filtrar(ag, { credorIds: ['c1', 'c1'] });
+    assert.equal(repetido.bordero.length, 1);
+    assert.match(montarKpis(repetido).kpiBordero[0]!.valor, /10\.000,00/);
   });
 
   it('filtro de UF alcança a posição, que não tem competência', () => {

@@ -6,8 +6,11 @@
 import type { DashboardPayload } from './dashboard-types';
 
 export interface DiretoriaFiltros {
-  /** Vazio/null = consolidado de todos os credores. */
-  credorId: string | null;
+  /**
+   * Lista VAZIA = todos os credores. Não existe "nenhum credor": quem
+   * desmarca tudo quer voltar ao consolidado, não uma tela zerada.
+   */
+  credorIds: string[];
   uf: string;
   de: string;
   ate: string;

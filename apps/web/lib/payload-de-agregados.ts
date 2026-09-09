@@ -109,8 +109,8 @@ const ORDEM_ROSCA: { classe: string; label: string; cor: string }[] = [
 ];
 
 export interface FiltroAgregado {
-  /** Vazio = todos os credores (visão da diretoria). */
-  credorId?: string | null;
+  /** Lista vazia ou ausente = todos os credores (visão da diretoria). */
+  credorIds?: string[] | null;
   uf?: string | null;
   de?: string | null;
   ate?: string | null;
@@ -119,8 +119,9 @@ export interface FiltroAgregado {
 function passaFiltro(
   linha: { credor_id: string; uf: string; competencia?: string },
   filtro: FiltroAgregado,
+  escolhidos: Set<string> | null,
 ): boolean {
-  if (filtro.credorId && linha.credor_id !== filtro.credorId) return false;
+  if (escolhidos && !escolhidos.has(linha.credor_id)) return false;
   if (filtro.uf && filtro.uf !== 'todos' && linha.uf !== filtro.uf) return false;
   if (linha.competencia) {
     if (filtro.de && linha.competencia < filtro.de) return false;
@@ -130,12 +131,16 @@ function passaFiltro(
 }
 
 export function filtrar(agregados: Agregados, filtro: FiltroAgregado): Agregados {
+  // Set montado uma vez: com muitos credores escolhidos, um `includes` por
+  // linha viraria busca linear dentro de cada varredura.
+  const escolhidos = filtro.credorIds?.length ? new Set(filtro.credorIds) : null;
+
   return {
-    bordero: agregados.bordero.filter((l) => passaFiltro(l, filtro)),
-    repasse: agregados.repasse.filter((l) => passaFiltro(l, filtro)),
+    bordero: agregados.bordero.filter((l) => passaFiltro(l, filtro, escolhidos)),
+    repasse: agregados.repasse.filter((l) => passaFiltro(l, filtro, escolhidos)),
     // Posição não tem competência: é o saldo de hoje, não do período.
-    posicao: agregados.posicao.filter((l) => passaFiltro(l, filtro)),
-    classe: agregados.classe.filter((l) => passaFiltro(l, filtro)),
+    posicao: agregados.posicao.filter((l) => passaFiltro(l, filtro, escolhidos)),
+    classe: agregados.classe.filter((l) => passaFiltro(l, filtro, escolhidos)),
   };
 }
 

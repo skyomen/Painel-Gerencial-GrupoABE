@@ -1,10 +1,13 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import {
+  ArrowLeft,
   BarChart3,
   ChevronRight,
+  Eye,
   FileInput,
   Handshake,
   LayoutDashboard,
@@ -20,7 +23,8 @@ import {
   X,
 } from 'lucide-react';
 import { LoadingScreen } from '@/components/ui/loading-screen';
-import { logout, me, type AuthUser } from '@/lib/auth';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { isSuperAdmin, logout, me, type AuthUser } from '@/lib/auth';
 import type { ApiError } from '@/lib/api-client';
 import { fetchDashboard } from '@/lib/dashboard-api';
 import {
@@ -28,12 +32,13 @@ import {
   normalizarFiltros,
   OPCOES_FILTRO_PADRAO,
 } from '@/lib/dashboard-filters';
+import { EMPTY_DASHBOARD_PAYLOAD } from '@/lib/dashboard-empty';
 import {
   FILTROS_INICIAIS,
-  MOCK_DASHBOARD_PAYLOAD,
+  type CredorPreview,
   type DashboardPayload,
   type FiltrosDashboard,
-} from '@/lib/dashboard-mock';
+} from '@/lib/dashboard-types';
 import { Logo } from '@/components/brand/logo';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { FormattedDate } from '@/components/ui/formatted-date';
@@ -59,19 +64,41 @@ const NAV = [
 ];
 
 export default function DashboardPage() {
+  return (
+    <Suspense fallback={<LoadingScreen message="Carregando seu painel…" />}>
+      <DashboardContent />
+    </Suspense>
+  );
+}
+
+function DashboardContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  /** Prévia do painel de um credor — só o SUPER_ADMIN consegue usar (API valida). */
+  const credorIdParam = searchParams.get('credorId');
   const [user, setUser] = useState<AuthUser | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [redirecionando, setRedirecionando] = useState(false);
   const [menuAberto, setMenuAberto] = useState(false);
   const [filtros, setFiltros] = useState<FiltrosDashboard>(FILTROS_INICIAIS);
-  const [dados, setDados] = useState<DashboardPayload>(MOCK_DASHBOARD_PAYLOAD);
-  const [fonte, setFonte] = useState<'abeweb' | 'mock'>('mock');
+  const [dados, setDados] = useState<DashboardPayload>(EMPTY_DASHBOARD_PAYLOAD);
+  const [fonte, setFonte] = useState<'abeweb' | 'vazio'>('vazio');
   const [sincronizadoEm, setSincronizadoEm] = useState<string | null>(null);
   const [carregandoDados, setCarregandoDados] = useState(false);
   const [opcoesFiltro, setOpcoesFiltro] = useState(OPCOES_FILTRO_PADRAO);
-  /** Só mantém datas digitadas pelo usuário; padrão vem sempre da API (min inclusão + hoje). */
-  const datasAlteradasPeloUsuario = useRef(false);
+  const [credorPreview, setCredorPreview] = useState<CredorPreview | null>(null);
+  /**
+   * Datas que a API resolveu (mín. inclusão → hoje) quando o usuário não escolheu nenhuma.
+   * Ficam FORA de `filtros` de propósito: gravá-las lá disparava uma segunda busca
+   * em toda abertura do painel, porque o efeito depende de `filtros`.
+   */
+  const [datasAplicadas, setDatasAplicadas] = useState<{
+    dataInicio: string;
+    dataFinal: string;
+  } | null>(null);
+
+  /** A tela responde na hora; a busca espera o usuário parar de mexer. */
+  const filtrosBusca = useDebouncedValue(filtros, 350);
 
   useEffect(() => {
     me()
@@ -83,52 +110,40 @@ export default function DashboardPage() {
       .finally(() => setCarregando(false));
   }, [router]);
 
+  /** Credor só vê o próprio painel: o parâmetro é ignorado fora do SUPER_ADMIN. */
+  const credorId = user && isSuperAdmin(user) ? credorIdParam : null;
+  const emPrevia = Boolean(credorId);
+
   useEffect(() => {
     if (!user) return;
 
     let cancelado = false;
     setCarregandoDados(true);
 
-    fetchDashboard(filtros)
+    fetchDashboard(filtrosBusca, credorId)
       .then((res) => {
         if (cancelado) return;
         setDados(res.payload);
         setFonte(res.fonte);
         setSincronizadoEm(res.sincronizadoEm);
+        setCredorPreview(res.credorPreview ?? null);
+        setDatasAplicadas(res.filtrosAplicados ?? null);
+
         const opcoes = mergeOpcoesFiltro(res.payload);
         setOpcoesFiltro(opcoes);
+
+        // Só corrige seleção que deixou de existir no snapshot (ex.: UF que sumiu do lote).
         setFiltros((prev) => {
           const patch = normalizarFiltros(prev, opcoes);
-          const datas = res.filtrosAplicados;
-          const dataInicio = datasAlteradasPeloUsuario.current
-            ? prev.dataInicio || datas?.dataInicio || ''
-            : datas?.dataInicio || prev.dataInicio || '';
-          const dataFinal = datasAlteradasPeloUsuario.current
-            ? prev.dataFinal || datas?.dataFinal || ''
-            : datas?.dataFinal || prev.dataFinal || '';
-
-          const codCliente = patch.codCliente ?? prev.codCliente;
-          const loteEnvio = patch.loteEnvio ?? prev.loteEnvio;
-          const uf = patch.uf ?? prev.uf;
-
-          if (
-            codCliente === prev.codCliente &&
-            loteEnvio === prev.loteEnvio &&
-            uf === prev.uf &&
-            dataInicio === prev.dataInicio &&
-            dataFinal === prev.dataFinal
-          ) {
-            return prev;
-          }
-
-          return { ...prev, codCliente, loteEnvio, uf, dataInicio, dataFinal };
+          return Object.keys(patch).length ? { ...prev, ...patch } : prev;
         });
       })
       .catch(() => {
         if (cancelado) return;
-        setDados(MOCK_DASHBOARD_PAYLOAD);
-        setFonte('mock');
+        setDados(EMPTY_DASHBOARD_PAYLOAD);
+        setFonte('vazio');
         setSincronizadoEm(null);
+        setCredorPreview(null);
       })
       .finally(() => {
         if (!cancelado) setCarregandoDados(false);
@@ -137,7 +152,7 @@ export default function DashboardPage() {
     return () => {
       cancelado = true;
     };
-  }, [user, filtros]);
+  }, [user, filtrosBusca, credorId]);
 
   async function handleLogout() {
     try {
@@ -150,11 +165,21 @@ export default function DashboardPage() {
   }
 
   function atualizarFiltros(patch: Partial<FiltrosDashboard>) {
-    if ('dataInicio' in patch || 'dataFinal' in patch) {
-      datasAlteradasPeloUsuario.current = true;
-    }
     setFiltros((prev) => ({ ...prev, ...patch }));
   }
+
+  /** Data vazia significa "use o padrão"; nos campos mostramos o que a API resolveu. */
+  const filtrosExibidos = useMemo<FiltrosDashboard>(
+    () => ({
+      ...filtros,
+      dataInicio: filtros.dataInicio || datasAplicadas?.dataInicio || '',
+      dataFinal: filtros.dataFinal || datasAplicadas?.dataFinal || '',
+    }),
+    [filtros, datasAplicadas],
+  );
+
+  /** Usuário mexeu e a busca ainda não saiu — o painel na tela é o de antes. */
+  const buscaPendente = filtros !== filtrosBusca;
 
   if (carregando || redirecionando || !user) {
     return (
@@ -207,7 +232,16 @@ export default function DashboardPage() {
           ))}
         </nav>
 
-        <div className="border-t border-border p-4">
+        <div className="space-y-3 border-t border-border p-4">
+          {emPrevia && (
+            <Link
+              href="/admin/credores"
+              className="flex w-full items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/15"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Voltar para credores
+            </Link>
+          )}
           <div className="flex items-center gap-3 rounded-xl bg-muted/60 p-3">
             <UserAvatar nome={user.nome} fotoUrl={user.fotoUrl} />
             <div className="min-w-0 flex-1">
@@ -250,10 +284,14 @@ export default function DashboardPage() {
 
           <div className="hidden min-w-0 flex-1 sm:block">
             <h1 className="truncate font-display text-lg font-semibold text-foreground">
-              Dashboard Inteligente
+              {emPrevia
+                ? (credorPreview?.razaoSocial ?? 'Painel do credor')
+                : 'Dashboard Inteligente'}
             </h1>
             <p className="truncate text-xs text-muted-foreground">
-              Visão 360º · ABE · AvantPay · Acordo Seguro
+              {emPrevia
+                ? 'Prévia — exatamente o que o credor vê ao entrar'
+                : 'Visão 360º · ABE · AvantPay · Acordo Seguro'}
             </p>
           </div>
 
@@ -270,14 +308,38 @@ export default function DashboardPage() {
                 ? sincronizadoEm
                   ? `ABE WEB · ${new Date(sincronizadoEm).toLocaleString('pt-BR')}`
                   : 'ABE WEB'
-                : 'Demonstração'}
+                : 'Aguardando sincronização'}
             </span>
-            {carregandoDados && <span className="text-xs text-muted-foreground">Atualizando…</span>}
+            {(carregandoDados || buscaPendente) && (
+              <span className="text-xs text-muted-foreground">Atualizando…</span>
+            )}
             <ThemeToggle />
           </div>
         </header>
 
         <main className="space-y-6 p-4 sm:p-6">
+          {emPrevia && (
+            <section className="flex flex-col gap-3 rounded-2xl border border-primary/30 bg-primary/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="flex items-start gap-2 text-sm text-foreground">
+                <Eye className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <span>
+                  Você está vendo o painel de{' '}
+                  <strong className="font-semibold">
+                    {credorPreview?.razaoSocial ?? 'credor selecionado'}
+                  </strong>{' '}
+                  como o credor vê. Somente leitura.
+                </span>
+              </p>
+              <Link
+                href="/admin/credores"
+                className="inline-flex w-fit shrink-0 items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-xs font-semibold text-foreground shadow-sm transition-colors hover:bg-muted"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Sair da prévia
+              </Link>
+            </section>
+          )}
+
           {/* Boas-vindas */}
           <section className="bg-brand relative overflow-hidden rounded-3xl border border-primary-deep/40 p-6 shadow-card sm:p-8">
             <div className="pointer-events-none absolute inset-0 bg-grid-light opacity-20 [background-size:32px_32px]" />
@@ -288,28 +350,43 @@ export default function DashboardPage() {
                   <FormattedDate />
                 </p>
                 <h2 className="mt-1 font-display text-2xl font-bold text-primary-foreground sm:text-3xl">
-                  Olá, {user.nome.split(' ')[0]}
+                  {emPrevia
+                    ? (credorPreview?.razaoSocial ?? 'Painel do credor')
+                    : `Olá, ${user.nome.split(' ')[0]}`}
                 </h2>
                 <p className="mt-1 max-w-xl text-primary-foreground/85">
                   Panorama consolidado da carteira — do borderô recebido à efetividade por UF.
                 </p>
               </div>
               <span className="inline-flex w-fit items-center gap-2 rounded-full bg-white/15 px-3.5 py-1.5 text-sm font-medium text-primary-foreground backdrop-blur">
-                <ShieldCheck className="h-4 w-4" />
-                {papelLabel(user.papel)}
+                {emPrevia ? <Eye className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
+                {emPrevia ? 'Visão do credor' : papelLabel(user.papel)}
               </span>
             </div>
           </section>
 
           {/* Filtros globais */}
           <GlobalFilters
-            filtros={filtros}
+            filtros={filtrosExibidos}
             opcoesCodCliente={opcoesFiltro.codCliente}
             opcoesLote={opcoesFiltro.lote}
             opcoesUf={opcoesFiltro.uf}
             datasDisponiveis={dados.meta?.datasBordero}
             onChange={atualizarFiltros}
           />
+
+          {fonte === 'vazio' && (
+            <section className="rounded-2xl border border-dashed border-border bg-muted/30 p-8 text-center">
+              <p className="font-display text-lg font-semibold text-foreground">
+                Nenhum dado sincronizado ainda
+              </p>
+              <p className="mx-auto mt-2 max-w-lg text-sm text-muted-foreground">
+                {emPrevia
+                  ? 'Este credor ainda não tem carteira sincronizada com o ABE WEB. Confira os códigos de cliente no cadastro e aguarde a próxima sincronização.'
+                  : 'Os indicadores aparecerão aqui após a primeira sincronização com o ABE WEB. Se você acabou de receber acesso, aguarde alguns minutos ou entre em contato com o suporte.'}
+              </p>
+            </section>
+          )}
 
           {/* Borderô */}
           <KpiSection

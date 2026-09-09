@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start -p 3000",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test lib/route-guards.test.ts lib/rate-limit.test.ts lib/dashboard-scope.test.ts lib/carteira-fetch.test.ts lib/payload-de-agregados.test.ts lib/consistencia-telas.test.ts"
   },
   "dependencies": {
     "@abe/canonical-model": "workspace:*",
@@ -30,6 +31,7 @@
     "globals": "^15.9.0",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13",
+    "tsx": "^4.19.2",
     "typescript": "^5.6.2"
   }
 }

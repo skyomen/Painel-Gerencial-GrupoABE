@@ -3,9 +3,22 @@
 import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import type { AtorComposicao, RoscaItem } from '@/lib/dashboard-types';
-import { CARTEIRA_ROSCA } from '@/lib/dashboard-mock';
 
-export function CarteiraDonut({ segmentos = CARTEIRA_ROSCA }: { segmentos?: RoscaItem[] }) {
+export function CarteiraDonut({ segmentos = [] }: { segmentos?: RoscaItem[] }) {
+  if (!segmentos.length) {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">
+        <div className="mb-5">
+          <h3 className="font-display text-lg font-semibold text-foreground">
+            Visão geral da carteira
+          </h3>
+          <p className="text-sm text-muted-foreground">Distribuição percentual consolidada</p>
+        </div>
+        <p className="py-8 text-center text-sm text-muted-foreground">Sem dados no período.</p>
+      </div>
+    );
+  }
+
   const total = segmentos.reduce((s, i) => s + i.pct, 0);
   let acumulado = 0;
 
@@ -60,8 +73,24 @@ export function CarteiraDonut({ segmentos = CARTEIRA_ROSCA }: { segmentos?: Rosc
   );
 }
 
-export function ComposicaoAtores({ atores }: { atores: AtorComposicao[] }) {
+export function ComposicaoAtores({ atores = [] }: { atores?: AtorComposicao[] }) {
   const [expandido, setExpandido] = useState<string | null>(null);
+
+  if (!atores.length) {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">
+        <div className="mb-5">
+          <h3 className="font-display text-lg font-semibold text-foreground">
+            Composição por ator
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            ABE consolida Delphi + ABE Web · clique para detalhar
+          </p>
+        </div>
+        <p className="py-8 text-center text-sm text-muted-foreground">Sem dados no período.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">

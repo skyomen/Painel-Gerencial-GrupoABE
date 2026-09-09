@@ -125,9 +125,24 @@ export interface DashboardPayload {
   meta?: DashboardMeta;
 }
 
+/** Credor visitado quando o SUPER_ADMIN abre o painel de um credor (prévia). */
+export interface CredorPreview {
+  id: string;
+  razaoSocial: string;
+}
+
 export interface DashboardResponse {
-  fonte: 'abeweb' | 'mock';
+  fonte: 'abeweb' | 'vazio';
   sincronizadoEm: string | null;
   payload: DashboardPayload;
   filtrosAplicados?: Pick<FiltrosDashboard, 'dataInicio' | 'dataFinal'>;
+  credorPreview?: CredorPreview;
 }
+
+export const FILTROS_INICIAIS: FiltrosDashboard = {
+  codCliente: 'todos',
+  loteEnvio: 'todos',
+  dataInicio: '',
+  dataFinal: '',
+  uf: 'todos',
+};

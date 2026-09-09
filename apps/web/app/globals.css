@@ -391,3 +391,24 @@ html.brand-custom-cursor * {
     scroll-behavior: auto !important;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Séries dos gráficos da diretoria.
+ *
+ * Paleta CATEGÓRICA (identidade: enviado vs recebido), não a paleta de status —
+ * `success` e `warning` são reservadas para estado e não viram "série 2".
+ *
+ * Os passos do modo escuro são ESCOLHIDOS para a superfície escura, não um
+ * clareamento automático dos do claro. Ambos os conjuntos foram validados
+ * contra a superfície do card: separação sob daltonismo ΔE 24,7 (claro) e
+ * 26,8 (escuro), com alvo ≥ 8; contraste ≥ 3:1 nos dois.
+ * ------------------------------------------------------------------------- */
+.viz-diretoria {
+  --serie-enviado: #2a78d6;
+  --serie-recebido: #eb6834;
+}
+
+.dark .viz-diretoria {
+  --serie-enviado: #3987e5;
+  --serie-recebido: #d95926;
+}

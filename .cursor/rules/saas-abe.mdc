@@ -1,0 +1,32 @@
+---
+description: Princípios SaaS do Painel ABE (Supabase + Next) — fail-closed, tenants, secrets
+alwaysApply: true
+---
+
+# Painel Gerencial Grupo ABE — regras sempre ativas
+
+## Stack
+
+- Next.js (`apps/web`) + Supabase Auth/Postgres/RLS + Vercel.
+- **Local:** `pnpm dev` ou `pnpm docker:up`. **Produção:** Vercel (não deploy via Compose).
+- **Não** propor Spring Boot, JWT em `localStorage`, nem segundo banco “oficial” no lugar do Supabase.
+- Blueprint `SAAS-STRUCTURE-BLUEPRINT.md` = princípios; adaptação = `docs/adr/0006-blueprint-adaptacao-supabase.md`.
+
+## Segurança
+
+- Fail closed: na dúvida, 401/403.
+- `/api/admin/**` só com `requireSuperAdmin()`.
+- Dashboard e métricas filtrados por `tenant_id` da sessão + RLS.
+- Nunca expor `SUPABASE_SERVICE_ROLE_KEY` no browser.
+- Legado ABE WEB/Delphi: somente leitura (SELECT).
+
+## Rotas
+
+- Admin: `/admin/*` · Credor: `/dashboard` · Negado: `/sem-permissao` · Login: `/login`
+- SUPER_ADMIN pode acessar `/dashboard` (suporte). Credor **não** acessa `/admin`.
+
+## Dados
+
+- Sem mock/fake no dashboard quando não houver sync.
+- Schema só via `supabase/migrations/`.
+- Secrets só em `.env` / secrets do GitHub/Vercel.

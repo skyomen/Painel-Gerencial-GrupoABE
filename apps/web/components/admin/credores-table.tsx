@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { Pencil, Search, UserX, X } from 'lucide-react';
+import { LayoutDashboard, Pencil, Search, UserX, X } from 'lucide-react';
 import { SortableTableHead } from '@/components/admin/sortable-table-head';
 import { TablePagination } from '@/components/admin/table-pagination';
 import { useDataTable } from '@/hooks/use-data-table';
@@ -148,7 +148,7 @@ export function CredoresTable({ credores }: { credores: Credor[] }) {
       ) : (
         <>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] text-sm">
+            <table className="w-full min-w-[1100px] text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
                   <SortableTableHead
@@ -228,13 +228,23 @@ export function CredoresTable({ credores }: { credores: Credor[] }) {
                       <StatusBadge status={c.tenantStatus} />
                     </td>
                     <td className={`${tdBase} text-center`}>
-                      <Link
-                        href={`/admin/credores/${c.id}/editar`}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                        Editar
-                      </Link>
+                      <div className="flex flex-wrap items-center justify-center gap-2">
+                        <Link
+                          href={`/dashboard?credorId=${encodeURIComponent(c.id)}`}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary shadow-sm transition-colors hover:bg-primary/15"
+                          title={`Ver o painel de ${c.razaoSocial} como o credor vê`}
+                        >
+                          <LayoutDashboard className="h-3.5 w-3.5" />
+                          Ver dashboard
+                        </Link>
+                        <Link
+                          href={`/admin/credores/${c.id}/editar`}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          Editar
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -1,23 +1,10 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { decideRouteGuard, type RouteProfile } from '@/lib/route-guards';
 
-type RouteProfile = { papel: string; ativo: boolean } | null;
-
-function loginRedirect(request: NextRequest) {
+function redirectTo(request: NextRequest, pathname: string) {
   const url = request.nextUrl.clone();
-  url.pathname = '/login';
-  return NextResponse.redirect(url);
-}
-
-function dashboardRedirect(request: NextRequest) {
-  const url = request.nextUrl.clone();
-  url.pathname = '/dashboard';
-  return NextResponse.redirect(url);
-}
-
-function adminRedirect(request: NextRequest) {
-  const url = request.nextUrl.clone();
-  url.pathname = '/admin/credores';
+  url.pathname = pathname;
   return NextResponse.redirect(url);
 }
 
@@ -68,47 +55,12 @@ async function loadProfile(
   return data ?? null;
 }
 
-function guardRoute(
-  request: NextRequest,
-  pathname: string,
-  userId: string | undefined,
-  profile: RouteProfile,
-): NextResponse | null {
-  const isLoginRoute = pathname === '/login' || pathname.startsWith('/login/');
-  const isAdminRoute = pathname.startsWith('/admin');
-  const isDashboardRoute = pathname.startsWith('/dashboard');
-  const isProtected = isAdminRoute || isDashboardRoute;
-
-  if (isProtected && !userId) {
-    return loginRedirect(request);
-  }
-
-  if (userId && isLoginRoute) {
-    if (profile?.ativo && profile.papel === 'SUPER_ADMIN') return adminRedirect(request);
-    if (profile?.ativo) return dashboardRedirect(request);
-    return loginRedirect(request);
-  }
-
-  if (userId && isAdminRoute) {
-    if (!profile?.ativo) return loginRedirect(request);
-    if (profile.papel !== 'SUPER_ADMIN') return dashboardRedirect(request);
-  }
-
-  if (userId && isDashboardRoute) {
-    if (!profile?.ativo) return loginRedirect(request);
-  }
-
-  return null;
-}
-
 /** Renova sessão Supabase, aplica guardas de rota e repassa pathname ao layout. */
 export async function handleMiddleware(request: NextRequest): Promise<NextResponse> {
   const pathname = request.nextUrl.pathname;
 
   if (pathname === '/') {
-    const url = request.nextUrl.clone();
-    url.pathname = '/login';
-    return NextResponse.redirect(url);
+    return redirectTo(request, '/login');
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -143,9 +95,10 @@ export async function handleMiddleware(request: NextRequest): Promise<NextRespon
   } = await supabase.auth.getUser();
 
   const profile = user ? await loadProfile(supabase, user.id) : null;
-  const guardResponse = guardRoute(request, pathname, user?.id, profile);
+  const decision = decideRouteGuard(pathname, user?.id, profile);
 
-  if (guardResponse) {
+  if (decision.type === 'redirect') {
+    const guardResponse = redirectTo(request, decision.to);
     mergeCookies(supabaseResponse, guardResponse);
     return guardResponse;
   }

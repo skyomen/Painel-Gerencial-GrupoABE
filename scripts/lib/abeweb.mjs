@@ -14,6 +14,9 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { normalizeEstadoUf } from './estado-uf.mjs';
+import { parseBrDecimal } from './parse-br.mjs';
+
+export { parseBrDecimal };
 import sql from 'mssql';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -170,35 +173,6 @@ export async function fetchAllAbeWebRowsAtivos(codCliente, dateRange = getSyncDa
     CARTEIRA_QUERY_SEM_DATA_INCLUSAO,
     'ativos',
   );
-}
-
-export function parseBrDecimal(value) {
-  if (value == null || value === '') return 0;
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-
-  const s = String(value).trim();
-  if (!s) return 0;
-
-  const hasComma = s.includes(',');
-  const hasDot = s.includes('.');
-
-  let normalized;
-  if (hasComma) {
-    normalized = s.replace(/\./g, '').replace(',', '.');
-  } else if (hasDot) {
-    const parts = s.split('.');
-    const last = parts[parts.length - 1] ?? '';
-    if (parts.length === 2 && last.length <= 2) {
-      normalized = s;
-    } else {
-      normalized = s.replace(/\./g, '');
-    }
-  } else {
-    normalized = s;
-  }
-
-  const n = Number.parseFloat(normalized);
-  return Number.isFinite(n) ? n : 0;
 }
 
 function parseBrDate(str) {

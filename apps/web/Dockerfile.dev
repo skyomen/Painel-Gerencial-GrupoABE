@@ -1,0 +1,22 @@
+# syntax=docker/dockerfile:1
+# Dev local: Next.js com hot reload (volume montado pelo compose).
+
+FROM node:22-alpine
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
+WORKDIR /repo
+
+# Só o necessário para instalar deps na primeira subida; o código vem do volume.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
+COPY apps/web/package.json ./apps/web/
+COPY packages/canonical-model/package.json ./packages/canonical-model/
+COPY packages/config/package.json ./packages/config/
+
+RUN pnpm install --frozen-lockfile
+
+COPY apps/web/docker-entrypoint.dev.sh /usr/local/bin/docker-entrypoint.dev.sh
+RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.dev.sh && chmod +x /usr/local/bin/docker-entrypoint.dev.sh
+
+EXPOSE 3000
+CMD ["docker-entrypoint.dev.sh"]

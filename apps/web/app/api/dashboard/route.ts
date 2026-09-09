@@ -14,8 +14,10 @@ import {
   todayIso,
 } from '@/lib/bordero-lote';
 import { normalizeEstadoUf } from '@/lib/estado-uf';
-import { MOCK_DASHBOARD_PAYLOAD } from '@/lib/dashboard-mock';
+import { emptyDashboardResponse } from '@/lib/dashboard-empty';
+import { resolveDashboardScope } from '@/lib/dashboard-scope';
 import { buildOpcoesCodClienteDashboard, listCodigosSync } from '@/lib/credor-codigos';
+import { buildOpcoesUfFromIndice } from '@/lib/dashboard-filters';
 import type {
   DashboardPayload,
   DashboardResponse,
@@ -31,14 +33,6 @@ function parseFiltros(searchParams: URLSearchParams): FiltrosDashboard {
     dataInicio: searchParams.get('dataInicio') ?? '',
     dataFinal: searchParams.get('dataFinal') ?? '',
     uf: searchParams.get('uf') ?? 'todos',
-  };
-}
-
-function mockResponse(): DashboardResponse {
-  return {
-    fonte: 'mock',
-    sincronizadoEm: null,
-    payload: MOCK_DASHBOARD_PAYLOAD,
   };
 }
 
@@ -61,6 +55,7 @@ function mergeOpcoesCodCliente(base: OpcaoFiltro[], extra?: OpcaoFiltro[] | null
 
 type CredorDashboardRow = {
   id: string;
+  tenant_id: string;
   cod_cliente_principal: string | null;
   abe_delphi_cliente_id: string | null;
   razao_social: string;
@@ -120,6 +115,17 @@ function snapshotValido(
   return Boolean(payload.borderoIndice?.length);
 }
 
+/**
+ * `borderoIndice` tem uma entrada por processo do ano e serve apenas ao cálculo
+ * no servidor — nenhum componente o lê. Enviá-lo custava megabytes por request,
+ * repetidos a cada filtro mexido.
+ */
+function semIndice(payload: DashboardPayload): DashboardPayload {
+  if (!payload.borderoIndice) return payload;
+  const { borderoIndice: _descartado, ...resto } = payload;
+  return resto;
+}
+
 function resolveDatasFiltro(filtros: FiltrosDashboard): { dataInicio: string; dataFinal: string } {
   const dataInicio = filtros.dataInicio || defaultDataInicioIso();
   const dataFinal = filtros.dataFinal || todayIso();
@@ -139,7 +145,7 @@ export async function GET(request: Request) {
 
   const { data: profile, error: profileError } = await supabase
     .from('usuarios')
-    .select('tenant_id, ativo')
+    .select('tenant_id, papel, ativo')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -147,18 +153,36 @@ export async function GET(request: Request) {
     return NextResponse.json({ title: 'Perfil não encontrado.' }, { status: 403 });
   }
 
-  const filtros = parseFiltros(new URL(request.url).searchParams);
+  const searchParams = new URL(request.url).searchParams;
+  const filtros = parseFiltros(searchParams);
+  const scope = resolveDashboardScope(profile.papel, searchParams.get('credorId'));
 
-  const { data: credor } = await supabase
-    .from('credores')
-    .select(
-      `id, cod_cliente_principal, abe_delphi_cliente_id, razao_social,
+  if (scope.type === 'negado') {
+    return NextResponse.json({ title: 'Você não tem permissão para esta ação.' }, { status: 403 });
+  }
+
+  const credorSelect = supabase.from('credores').select(
+    `id, tenant_id, cod_cliente_principal, abe_delphi_cliente_id, razao_social,
        codigos_cliente ( cod_cliente, rotulo )`,
-    )
-    .eq('tenant_id', profile.tenant_id)
-    .maybeSingle();
+  );
+
+  const { data: credor } =
+    scope.type === 'credor'
+      ? await credorSelect.eq('id', scope.credorId).maybeSingle()
+      : await credorSelect.eq('tenant_id', profile.tenant_id).maybeSingle();
 
   const credorRow = credor as CredorDashboardRow | null;
+
+  if (scope.type === 'credor' && !credorRow) {
+    return NextResponse.json({ title: 'Credor não encontrado.' }, { status: 404 });
+  }
+
+  /** Na prévia do SUPER_ADMIN o tenant é o do credor visitado, não o do admin. */
+  const tenantId = credorRow?.tenant_id ?? profile.tenant_id;
+  const previewCredor =
+    scope.type === 'credor' && credorRow
+      ? { id: credorRow.id, razaoSocial: credorRow.razao_social }
+      : undefined;
   const credorCodigos = credorRow ? mapCredorCodigos(credorRow) : null;
   const codigosSync = credorCodigos ? listCodigosSync(credorCodigos) : [];
   const codPrincipal = credorRow?.cod_cliente_principal?.trim() || null;
@@ -169,7 +193,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase
       .from('dashboard_carteira')
       .select('payload, sincronizado_em')
-      .eq('tenant_id', profile.tenant_id)
+      .eq('tenant_id', tenantId)
       .eq('cod_cliente', chave.cod_cliente)
       .eq('periodo', chave.periodo)
       .eq('lote_envio', chave.lote_envio)
@@ -193,7 +217,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase
       .from('dashboard_carteira')
       .select('payload, sincronizado_em')
-      .eq('tenant_id', profile.tenant_id)
+      .eq('tenant_id', tenantId)
       .in('cod_cliente', [...new Set([...(codPrincipal ? [codPrincipal] : []), ...codigosSync])])
       .eq('periodo', 'ano_atual')
       .eq('lote_envio', 'todos')
@@ -206,7 +230,7 @@ export async function GET(request: Request) {
   }
 
   if (!row?.payload) {
-    return NextResponse.json(mockResponse());
+    return NextResponse.json({ ...emptyDashboardResponse(), credorPreview: previewCredor });
   }
 
   const payloadBruto = row.payload as DashboardPayload;
@@ -217,7 +241,7 @@ export async function GET(request: Request) {
       const { data: baseRow } = await supabase
         .from('dashboard_carteira')
         .select('payload')
-        .eq('tenant_id', profile.tenant_id)
+        .eq('tenant_id', tenantId)
         .eq('cod_cliente', cod as string)
         .eq('periodo', 'ano_atual')
         .eq('lote_envio', 'todos')
@@ -308,11 +332,18 @@ export async function GET(request: Request) {
     payload.opcoesCodCliente = mergeOpcoesCodCliente(opcoesCredor, payload.opcoesCodCliente);
   }
 
+  // Snapshot antigo não traz opcoesUf; o cliente derivava do índice, que agora não viaja.
+  if (!payload.opcoesUf || payload.opcoesUf.length <= 1) {
+    const derivadas = buildOpcoesUfFromIndice(payloadBruto.borderoIndice);
+    if (derivadas.length > 1) payload.opcoesUf = derivadas;
+  }
+
   const response: DashboardResponse = {
     fonte: 'abeweb',
     sincronizadoEm: row.sincronizado_em,
-    payload,
+    payload: semIndice(payload),
     filtrosAplicados: datas,
+    credorPreview: previewCredor,
   };
 
   return NextResponse.json(response);

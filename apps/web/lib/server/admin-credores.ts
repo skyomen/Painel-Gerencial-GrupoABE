@@ -7,6 +7,7 @@ import {
   assertSetores,
 } from './admin-validators';
 import { AdminError, mapDbError } from './admin-errors';
+import { scheduleCredorOnboard } from './trigger-credor-onboard';
 
 export { AdminError, mapDbError };
 
@@ -315,6 +316,8 @@ export async function createCredor(
   const credor = await getCredor(db, credorRow.id);
   if (!credor) throw new Error('Credor criado mas não encontrado.');
 
+  scheduleCredorOnboard(credorRow.id);
+
   return { credor, credenciais: { email: emailResp, senha } };
 }
 
@@ -477,6 +480,8 @@ export async function createResponsavelCredor(
     await db.auth.admin.deleteUser(userId);
     throw usuarioError;
   }
+
+  scheduleCredorOnboard(credorId);
 
   return {
     responsavel: {

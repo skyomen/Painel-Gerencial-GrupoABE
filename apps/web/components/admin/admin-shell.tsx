@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Building2, ChevronRight, LogOut, Menu, Shield, Users, X } from 'lucide-react';
+import { Building2, ChevronRight, LogOut, Menu, Shield, TrendingUp, Users, X } from 'lucide-react';
 import { Logo } from '@/components/brand/logo';
 import { LoadingScreen } from '@/components/ui/loading-screen';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
@@ -13,11 +13,19 @@ import { logout, me, isSuperAdmin, type AuthUser } from '@/lib/auth';
 import { PAPEL_LABEL } from '@/lib/admin-labels';
 
 const NAV = [
+  { label: 'Diretoria', href: '/admin/diretoria', icon: TrendingUp, match: '/admin/diretoria' },
   { label: 'Credores', href: '/admin/credores', icon: Building2, match: '/admin/credores' },
   { label: 'Usuários', href: '/admin/usuarios', icon: Users, match: '/admin/usuarios' },
 ];
 
 function pageMeta(pathname: string): { title: string; subtitle: string; banner: string } {
+  if (pathname.startsWith('/admin/diretoria')) {
+    return {
+      title: 'Diretoria',
+      subtitle: 'Resultado consolidado de todos os credores',
+      banner: 'Visão somada da carteira — envio, recebimento e efetividade de todos os credores.',
+    };
+  }
   if (pathname.startsWith('/admin/credores/novo')) {
     return {
       title: 'Novo credor',

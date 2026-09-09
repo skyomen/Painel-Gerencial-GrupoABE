@@ -1,0 +1,36 @@
+# Dependências e builds locais
+node_modules
+**/node_modules
+.pnpm-store
+.next
+**/.next
+dist
+**/dist
+coverage
+.turbo
+.eslintcache
+
+# Secrets e env
+.env
+.env.*
+!.env.example
+
+# Git / IDE
+.git
+.github
+.husky
+.cursor
+.vscode
+.idea
+
+# Docs e artefatos irrelevantes ao build
+*.md
+!apps/web/public/**/*.md
+Arquitetura-da-Solucao-Unificada.docx
+agent-transcripts
+canvases
+
+# Logs / SO
+*.log
+.DS_Store
+Thumbs.db

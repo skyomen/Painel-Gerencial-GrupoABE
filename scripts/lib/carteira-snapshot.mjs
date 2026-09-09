@@ -2,10 +2,9 @@
  * Normaliza linhas ABE WEB → carteira_snapshot (Supabase).
  */
 
-import { parseBrDecimal } from './abeweb.mjs';
+import { parseBrDecimal } from './parse-br.mjs';
 import { normalizeEstadoUf } from './estado-uf.mjs';
-
-const BATCH_SIZE = 500;
+import { escreverCarteira } from './carteira-escrita.mjs';
 
 function parseBrDateToIso(str) {
   if (!str || String(str).trim() === '') return null;
@@ -14,6 +13,17 @@ function parseBrDateToIso(str) {
   const [d, m, y] = parts.map((p) => Number.parseInt(p, 10));
   if (!d || !m || !y) return null;
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+/**
+ * `Idade Titulo Cadastramento` é o DATEDIFF da 749 e chega como número ou texto.
+ * Idade negativa (título vencendo depois do cadastro) vira null em vez de 0 —
+ * 0 contaria na faixa "0-30" e na média de idade, inventando dado.
+ */
+export function parseIdadeDias(valor) {
+  if (valor === null || valor === undefined || String(valor).trim() === '') return null;
+  const n = Number.parseInt(String(valor).trim(), 10);
+  return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
 /** Converte linha bruta da query 749 no formato carteira_snapshot. */
@@ -31,6 +41,9 @@ export function normalizarLinhaCarteira(row, credorId, sistemaOrigem) {
     status: String(row.Status ?? '').trim(),
     visao_geral_carteira: String(row['Visão Geral da Carteira'] ?? '').trim() || null,
     uf: normalizeEstadoUf(row.Estado) || null,
+    // A idade vinha só dentro do borderoIndice do JSON, que deixou de viajar ao
+    // browser. Sem ela nos fatos, o cubo de faixa de idade nasce vazio.
+    idade_dias: parseIdadeDias(row['Idade Titulo Cadastramento']),
     sincronizado_em: new Date().toISOString(),
   };
 }
@@ -42,34 +55,47 @@ function brToIso(br) {
   return `${y}-${m}-${d}`;
 }
 
-/** Grava snapshot linha a linha (substitui credor + sistema). */
+/**
+ * Grava a carteira do credor, substituindo o que havia daquele sistema.
+ *
+ * A escrita em si vive em `carteira-escrita.mjs`, que escolhe entre transação
+ * (rápida, sem janela de credor vazio) e o caminho REST antigo.
+ */
 export async function upsertCarteiraSnapshot(db, credorId, sistemaOrigem, rows) {
   const normalizados = rows.map((row) => normalizarLinhaCarteira(row, credorId, sistemaOrigem));
 
-  const { error: delErr } = await db
-    .from('carteira_snapshot')
-    .delete()
-    .eq('credor_id', credorId)
-    .eq('sistema_origem', sistemaOrigem);
-
-  if (delErr) throw delErr;
-
   if (normalizados.length === 0) {
-    console.log(`    carteira_snapshot ${sistemaOrigem}: 0 linhas (limpo)`);
-    return 0;
+    // Mesmo sem linhas novas é preciso limpar: carteira que zerou na origem
+    // tem de zerar aqui, senão o painel mostra dado que não existe mais.
+    console.log(`    carteira_snapshot ${sistemaOrigem}: 0 linhas (limpando)`);
   }
 
-  for (let i = 0; i < normalizados.length; i += BATCH_SIZE) {
-    const chunk = normalizados.slice(i, i + BATCH_SIZE);
-    const { error } = await db.from('carteira_snapshot').insert(chunk);
-    if (error) throw error;
-    console.log(
-      `    carteira_snapshot ${sistemaOrigem}: lote ${Math.floor(i / BATCH_SIZE) + 1} (+${chunk.length})`,
-    );
+  return escreverCarteira(db, credorId, sistemaOrigem, normalizados);
+}
+
+/**
+ * Recalcula os agregados do dashboard (metricas_mensais_*, metricas_posicao).
+ *
+ * Só este credor/sistema, não o banco inteiro — é por isso que os agregados são
+ * tabela e não MATERIALIZED VIEW, cujo REFRESH é global.
+ *
+ * Não derruba o sync se falhar: a fonte da verdade é carteira_snapshot, que já
+ * foi gravada. Agregado desatualizado se conserta rodando de novo; sync
+ * interrompido no meio deixa o credor sem carteira.
+ */
+export async function refreshAgregados(db, credorId, sistemaOrigem = null) {
+  const { error } = await db.rpc('refresh_agregados_credor', {
+    p_credor_id: credorId,
+    p_sistema: sistemaOrigem,
+  });
+
+  if (error) {
+    console.warn(`    agregados NÃO recalculados (${error.message})`);
+    return false;
   }
 
-  console.log(`    carteira_snapshot ${sistemaOrigem}: ${normalizados.length} registros`);
-  return normalizados.length;
+  console.log(`    agregados recalculados (${sistemaOrigem ?? 'todos os sistemas'})`);
+  return true;
 }
 
 /** Atualiza metricas_cache via RPC calcular_metricas_credor. */

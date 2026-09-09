@@ -26,3 +26,4 @@ Data: AAAA-MM-DD
 | [0003](0003-identidade-autenticacao.md) | Provedor de identidade e autenticação | Proposto |
 | [0004](0004-multi-tenant-isolamento.md) | Estratégia multi-tenant e isolamento | Proposto |
 | [0005](0005-acesso-legado-sql2005.md) | Acesso ao legado SQL Server 2005 | Proposto |
+| [0006](0006-blueprint-adaptacao-supabase.md) | Adaptação do SAAS blueprint ao Supabase | Aceito |

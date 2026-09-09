@@ -17,6 +17,7 @@ import {
   getSyncDateRange,
 } from '../scripts/lib/abeweb.mjs';
 import {
+  refreshAgregados,
   refreshMetricasCache,
   upsertCarteiraSnapshot,
 } from '../scripts/lib/carteira-snapshot.mjs';
@@ -59,6 +60,7 @@ export async function sincronizarCredorSistema(credorId, sistema, clienteId, dat
 
   await upsertCarteiraSnapshot(db, credorId, sistema, rows);
   await refreshMetricasCache(db, credorId, dateRange, sistema);
+  await refreshAgregados(db, credorId, sistema);
 }
 
 export async function runETL() {
@@ -67,7 +69,9 @@ export async function runETL() {
 
   let query = db
     .from('credores')
-    .select('id, tenant_id, razao_social, cod_cliente_principal, abe_cliente_id, abe_delphi_cliente_id, avantpay_cliente_id, acordoseguro_id')
+    .select(
+      'id, tenant_id, razao_social, cod_cliente_principal, abe_cliente_id, abe_delphi_cliente_id, avantpay_cliente_id, acordoseguro_id',
+    )
     .not('cod_cliente_principal', 'is', null);
 
   if (credorFilter) query = query.eq('id', credorFilter);
@@ -88,18 +92,35 @@ export async function runETL() {
 
       if (abeId) {
         await sincronizarCredorSistema(credor.id, 'ABE_WEB', abeId, dateRange);
-      if (credor.abe_delphi_cliente_id) {
-        await sincronizarCredorSistema(credor.id, 'ABE_DELPHI', credor.abe_delphi_cliente_id, dateRange);
-      }
+        if (credor.abe_delphi_cliente_id) {
+          await sincronizarCredorSistema(
+            credor.id,
+            'ABE_DELPHI',
+            credor.abe_delphi_cliente_id,
+            dateRange,
+          );
+        }
       }
       if (credor.avantpay_cliente_id) {
-        await sincronizarCredorSistema(credor.id, 'AVANTPAY', credor.avantpay_cliente_id, dateRange);
+        await sincronizarCredorSistema(
+          credor.id,
+          'AVANTPAY',
+          credor.avantpay_cliente_id,
+          dateRange,
+        );
       }
       if (credor.acordoseguro_id) {
-        await sincronizarCredorSistema(credor.id, 'ACORDOSEGURO', credor.acordoseguro_id, dateRange);
+        await sincronizarCredorSistema(
+          credor.id,
+          'ACORDOSEGURO',
+          credor.acordoseguro_id,
+          dateRange,
+        );
       }
 
       await refreshMetricasCache(db, credor.id, dateRange, 'TODOS');
+      // p_sistema null recalcula os agregados de TODOS os sistemas do credor.
+      await refreshAgregados(db, credor.id, null);
     }
   } finally {
     await closePool();

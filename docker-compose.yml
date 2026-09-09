@@ -1,24 +1,79 @@
-# Ambiente de desenvolvimento local — PostgreSQL opcional
+# =============================================================================
+# Docker — ambiente LOCAL (separado da produção)
+# =============================================================================
 #
-# ATENÇÃO: Este compose NÃO é usado pelo stack principal do projeto.
-# O banco de produção e desenvolvimento é o Supabase PostgreSQL:
-#   https://vkzefmedwxvpqcivparz.supabase.co
+# Produção = Vercel (web) + Supabase (Auth/DB/RLS). Este Compose NÃO faz deploy.
 #
-# Use este compose APENAS se quiser um Postgres local isolado para
-# experimentos — ele NÃO substitui o Supabase (sem Auth, sem RLS do projeto).
-#
-# Fluxo recomendado para dev:
-#   1. Configurar .env com chaves Supabase (ver .env.example)
-#   2. Aplicar supabase/migrations/001_initial_schema.sql no Supabase
-#   3. pnpm db:seed && pnpm dev
-#
-# Uso deste compose (opcional):
-#   docker compose up -d
+# Comandos:
+#   docker compose up --build          # app Next.js local (hot reload)
 #   docker compose down
-#   docker compose down -v   # apaga dados locais
+#   docker compose --profile tools up  # + Postgres/Adminer (só experimento)
+#   docker compose --profile prod-like up --build web-prod
+#                                      # imagem standalone (teste “como produção”)
+#
+# Pré-requisito: .env na raiz com NEXT_PUBLIC_SUPABASE_* e SUPABASE_SERVICE_ROLE_KEY
+# (mesmo projeto Supabase ou um projeto de staging separado — recomendado).
+#
+# Auth/dados continuam no Supabase cloud. O Postgres do profile "tools" NÃO
+# substitui o Supabase (sem Auth/RLS do app).
+# =============================================================================
 
 services:
+  web:
+    container_name: abe-web-local
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile.dev
+    ports:
+      - '3000:3000'
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      WATCHPACK_POLLING: 'true'
+      CHOKIDAR_USEPOLLING: 'true'
+    # Docker Desktop no Windows às vezes quebra DNS interno → Supabase ENOTFOUND
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    volumes:
+      # Código do host (hot reload). Volumes anônimos/nomeados preservam node_modules Linux.
+      - .:/repo
+      - web_node_modules:/repo/node_modules
+      - web_app_node_modules:/repo/apps/web/node_modules
+      - canonical_node_modules:/repo/packages/canonical-model/node_modules
+      - config_node_modules:/repo/packages/config/node_modules
+      - web_next_cache:/repo/apps/web/.next
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/api/health']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+
+  web-prod:
+    profiles: ['prod-like']
+    container_name: abe-web-prodlike
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api}
+    ports:
+      - '3000:3000'
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+
   postgres:
+    profiles: ['tools']
     image: postgres:16-alpine
     container_name: abe-postgres
     restart: unless-stopped
@@ -37,6 +92,7 @@ services:
       retries: 5
 
   adminer:
+    profiles: ['tools']
     image: adminer:4
     container_name: abe-adminer
     restart: unless-stopped
@@ -47,5 +103,9 @@ services:
         condition: service_healthy
 
 volumes:
+  web_node_modules:
+  web_app_node_modules:
+  canonical_node_modules:
+  config_node_modules:
+  web_next_cache:
   postgres_data:
-    driver: local

@@ -5,25 +5,25 @@ import type {
   UfMetrica,
 } from '@/lib/dashboard-types';
 import { formatBRL } from '@/lib/format-currency';
-import {
-  ENVIADO_RECEBIDO_MENSAL,
-  EFETIVIDADE_POR_IDADE,
-  FAIXA_IDADE_COMPARATIVO,
-  METRICAS_UF,
-} from '@/lib/dashboard-mock';
 
 function maxValor(items: { enviado?: number; recebido?: number; efetividade?: number }[]) {
+  if (!items.length) return 1;
   return Math.max(
     ...items.flatMap((i) => [i.enviado ?? 0, i.recebido ?? 0, i.efetividade ?? 0]),
     1,
   );
 }
 
-export function EnviadoRecebidoChart({
-  dados = ENVIADO_RECEBIDO_MENSAL,
-}: {
-  dados?: EnviadoRecebidoMes[];
-}) {
+export function EnviadoRecebidoChart({ dados = [] }: { dados?: EnviadoRecebidoMes[] }) {
+  if (!dados.length) {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">
+        <h3 className="font-display text-lg font-semibold text-foreground">Enviado vs recebido</h3>
+        <p className="py-8 text-center text-sm text-muted-foreground">Sem dados no período.</p>
+      </div>
+    );
+  }
+
   const max = maxValor(dados);
 
   return (
@@ -65,11 +65,18 @@ export function EnviadoRecebidoChart({
   );
 }
 
-export function EfetividadeIdadeChart({
-  dados = EFETIVIDADE_POR_IDADE,
-}: {
-  dados?: EfetividadeIdade[];
-}) {
+export function EfetividadeIdadeChart({ dados = [] }: { dados?: EfetividadeIdade[] }) {
+  if (!dados.length) {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">
+        <h3 className="font-display text-lg font-semibold text-foreground">
+          Efetividade por idade do título
+        </h3>
+        <p className="py-8 text-center text-sm text-muted-foreground">Sem dados no período.</p>
+      </div>
+    );
+  }
+
   const max = maxValor(dados);
 
   return (
@@ -101,11 +108,18 @@ export function EfetividadeIdadeChart({
   );
 }
 
-export function FaixaIdadeChart({
-  dados = FAIXA_IDADE_COMPARATIVO,
-}: {
-  dados?: FaixaIdadeComparativo[];
-}) {
+export function FaixaIdadeChart({ dados = [] }: { dados?: FaixaIdadeComparativo[] }) {
+  if (!dados.length) {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">
+        <h3 className="font-display text-lg font-semibold text-foreground">
+          Enviado vs recebido por faixa de idade
+        </h3>
+        <p className="py-8 text-center text-sm text-muted-foreground">Sem dados no período.</p>
+      </div>
+    );
+  }
+
   const max = Math.max(...dados.flatMap((i) => [i.enviado, i.recebido]), 1);
 
   return (
@@ -166,7 +180,16 @@ function BarRow({
   );
 }
 
-export function AnaliseGeografica({ dados = METRICAS_UF }: { dados?: UfMetrica[] }) {
+export function AnaliseGeografica({ dados = [] }: { dados?: UfMetrica[] }) {
+  if (!dados.length) {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">
+        <h3 className="font-display text-lg font-semibold text-foreground">Análise geográfica</h3>
+        <p className="py-8 text-center text-sm text-muted-foreground">Sem dados no período.</p>
+      </div>
+    );
+  }
+
   const maxEfet = Math.max(...dados.map((u) => u.efetividade), 1);
   const maiorRecebimento = [...dados].sort((a, b) => b.recebido - a.recebido)[0];
   const maiorVolume = [...dados].sort((a, b) => b.enviado - a.enviado)[0];

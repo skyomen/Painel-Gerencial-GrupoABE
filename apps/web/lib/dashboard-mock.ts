@@ -1,6 +1,6 @@
-/** Dados de demonstração — usados quando ainda não há sync do ABE WEB. */
+/** Dados de demonstração — apenas para desenvolvimento local (não usado em produção). */
 
-import type { DashboardPayload, FiltrosDashboard, OpcaoFiltro } from './dashboard-types';
+import type { DashboardPayload, OpcaoFiltro } from './dashboard-types';
 
 export type {
   AcordoLinha,
@@ -11,13 +11,7 @@ export type {
   KpiItem,
 } from './dashboard-types';
 
-export const FILTROS_INICIAIS: FiltrosDashboard = {
-  codCliente: 'todos',
-  loteEnvio: 'todos',
-  dataInicio: '',
-  dataFinal: '',
-  uf: 'todos',
-};
+export { FILTROS_INICIAIS } from './dashboard-types';
 
 export const OPCOES_COD_CLIENTE: OpcaoFiltro[] = [
   { value: 'todos', label: 'Todos os códigos' },

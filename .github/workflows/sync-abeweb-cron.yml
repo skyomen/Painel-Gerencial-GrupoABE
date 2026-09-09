@@ -1,0 +1,46 @@
+name: Sync ABE WEB (diário)
+
+on:
+  schedule:
+    # 04:00 America/Sao_Paulo (UTC-3) ≈ 07:00 UTC
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-abeweb
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Verificar e sincronizar credores
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Sync incremental (só credores com responsável)
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ABEWEB_DB_HOST: ${{ secrets.ABEWEB_DB_HOST }}
+          ABEWEB_DB_PORT: ${{ secrets.ABEWEB_DB_PORT }}
+          ABEWEB_DB_NAME: ${{ secrets.ABEWEB_DB_NAME }}
+          ABEWEB_DB_USER: ${{ secrets.ABEWEB_DB_USER }}
+          ABEWEB_DB_PASSWORD: ${{ secrets.ABEWEB_DB_PASSWORD }}
+          ABEWEB_DB_TRUST_CERT: ${{ secrets.ABEWEB_DB_TRUST_CERT }}
+        run: pnpm sync:abeweb:incremental

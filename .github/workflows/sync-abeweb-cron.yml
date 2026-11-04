@@ -43,4 +43,16 @@ jobs:
           ABEWEB_DB_USER: ${{ secrets.ABEWEB_DB_USER }}
           ABEWEB_DB_PASSWORD: ${{ secrets.ABEWEB_DB_PASSWORD }}
           ABEWEB_DB_TRUST_CERT: ${{ secrets.ABEWEB_DB_TRUST_CERT }}
-        run: pnpm sync:abeweb:incremental
+        run: |
+          {
+            printf 'NEXT_PUBLIC_SUPABASE_URL=%s\n' "$NEXT_PUBLIC_SUPABASE_URL"
+            printf 'SUPABASE_SERVICE_ROLE_KEY=%s\n' "$SUPABASE_SERVICE_ROLE_KEY"
+            printf 'ABEWEB_DB_HOST=%s\n' "$ABEWEB_DB_HOST"
+            printf 'ABEWEB_DB_PORT=%s\n' "$ABEWEB_DB_PORT"
+            printf 'ABEWEB_DB_NAME=%s\n' "$ABEWEB_DB_NAME"
+            printf 'ABEWEB_DB_USER=%s\n' "$ABEWEB_DB_USER"
+            printf 'ABEWEB_DB_PASSWORD=%s\n' "$ABEWEB_DB_PASSWORD"
+            printf 'ABEWEB_DB_TRUST_CERT=%s\n' "$ABEWEB_DB_TRUST_CERT"
+          } > .env
+          pnpm sync:abeweb:incremental
+          rm -f .env

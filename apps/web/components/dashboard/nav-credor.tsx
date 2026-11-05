@@ -49,6 +49,16 @@ function estaAtivo(href: string | null, pathname: string): boolean {
   return pathname.startsWith(href);
 }
 
+/**
+ * Preserva a prévia de credor (`?credorId=...`) ao navegar pelo menu — sem
+ * isto, o link descarta o parâmetro e a tela seguinte perde o escopo do
+ * SUPER_ADMIN em prévia.
+ */
+export function comCredorId(href: string, credorId?: string | null): string {
+  if (!credorId) return href;
+  return `${href}?credorId=${encodeURIComponent(credorId)}`;
+}
+
 const BASE =
   'group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200';
 const ATIVO = 'bg-primary text-primary-foreground shadow-soft';
@@ -57,10 +67,13 @@ const INATIVO = 'text-muted-foreground hover:bg-muted hover:text-foreground';
 export function NavCredor({
   pathname,
   onNavegar,
+  credorId,
 }: {
   pathname: string;
   /** Fecha a gaveta no celular depois do clique. */
   onNavegar?: () => void;
+  /** Prévia de credor em curso (SUPER_ADMIN) — propagada para os links do menu. */
+  credorId?: string | null;
 }) {
   return (
     <>
@@ -100,7 +113,7 @@ export function NavCredor({
         return (
           <Link
             key={item.label}
-            href={item.href}
+            href={comCredorId(item.href, credorId)}
             onClick={onNavegar}
             aria-current={ativo ? 'page' : undefined}
             className={classe}

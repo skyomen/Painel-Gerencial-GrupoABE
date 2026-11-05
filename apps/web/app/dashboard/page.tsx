@@ -37,7 +37,7 @@ import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { FormattedDate } from '@/components/ui/formatted-date';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { GlobalFilters } from '@/components/dashboard/global-filters';
-import { NavCredor } from '@/components/dashboard/nav-credor';
+import { NavCredor, comCredorId } from '@/components/dashboard/nav-credor';
 import { KpiSection } from '@/components/dashboard/kpi-section';
 import { CarteiraDonut, ComposicaoAtores } from '@/components/dashboard/charts/carteira-charts';
 import {
@@ -182,7 +182,7 @@ function DashboardContent() {
         }`}
       >
         <div className="flex h-16 items-center justify-between border-b border-border px-5">
-          <Logo href="/dashboard" />
+          <Logo href={comCredorId('/dashboard', credorId)} />
           <button
             type="button"
             onClick={() => setMenuAberto(false)}
@@ -196,7 +196,11 @@ function DashboardContent() {
         <nav className="flex-1 space-y-1 overflow-y-auto p-4">
           {/* O menu mora em `nav-credor.tsx` — esta tela e `/dashboard/relatorios`
               mostram a MESMA lista, e uma lista só não pode divergir da outra. */}
-          <NavCredor pathname={pathname} onNavegar={() => setMenuAberto(false)} />
+          <NavCredor
+            pathname={pathname}
+            onNavegar={() => setMenuAberto(false)}
+            credorId={credorId}
+          />
         </nav>
 
         <div className="space-y-3 border-t border-border p-4">

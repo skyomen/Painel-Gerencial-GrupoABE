@@ -1,16 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { ArrowLeft, LogOut, Menu, ShieldCheck, X } from 'lucide-react';
 import { Logo } from '@/components/brand/logo';
-import { NavCredor } from '@/components/dashboard/nav-credor';
+import { NavCredor, comCredorId } from '@/components/dashboard/nav-credor';
 import { LoadingScreen } from '@/components/ui/loading-screen';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { FormattedDate } from '@/components/ui/formatted-date';
-import { logout, me, type AuthUser } from '@/lib/auth';
+import { isSuperAdmin, logout, me, type AuthUser } from '@/lib/auth';
 import { PAPEL_LABEL } from '@/lib/admin-labels';
 
 /**
@@ -43,6 +43,8 @@ export function CredorShell({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const credorIdParam = searchParams.get('credorId');
   const [user, setUser] = useState<AuthUser | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [redirecionando, setRedirecionando] = useState(false);
@@ -67,6 +69,8 @@ export function CredorShell({
     return <LoadingScreen message={redirecionando ? 'Redirecionando…' : 'Carregando…'} />;
   }
 
+  const credorId = isSuperAdmin(user) ? credorIdParam : null;
+
   return (
     <div className="min-h-screen bg-background">
       <aside
@@ -75,7 +79,7 @@ export function CredorShell({
         }`}
       >
         <div className="flex h-16 items-center justify-between border-b border-border px-5">
-          <Logo href="/dashboard" />
+          <Logo href={comCredorId('/dashboard', credorId)} />
           <button
             type="button"
             onClick={() => setMenuAberto(false)}
@@ -87,12 +91,16 @@ export function CredorShell({
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto p-4">
-          <NavCredor pathname={pathname} onNavegar={() => setMenuAberto(false)} />
+          <NavCredor
+            pathname={pathname}
+            onNavegar={() => setMenuAberto(false)}
+            credorId={credorId}
+          />
         </nav>
 
         <div className="space-y-3 border-t border-border p-4">
           <Link
-            href="/dashboard"
+            href={comCredorId('/dashboard', credorId)}
             className="flex w-full items-center gap-2 rounded-xl border border-border px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />

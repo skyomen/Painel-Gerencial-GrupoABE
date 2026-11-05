@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cronograma — Painel Gerencial</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #EAEDF3;
+    --surface: #FFFFFF;
+    --surface-sunken: #F4F5F9;
+    --ink: #16213E;
+    --ink-muted: #5B6478;
+    --ink-faint: #8A91A3;
+    --border: #DCE1EA;
+    --primary: #153981;
+    --primary-deep: #213359;
+    --primary-soft: #E6ECF7;
+    --accent: #BD9941;
+    --accent-soft: #F7EFDC;
+    --success: #1F7A54;
+    --success-soft: #E4F3EC;
+    --warning: #B4792B;
+    --warning-soft: #FBEEDD;
+    --danger: #B3432F;
+    --danger-soft: #FBEAE5;
+    --shadow: 0 1px 2px rgba(22,33,62,.06), 0 8px 24px -12px rgba(22,33,62,.18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0A1120;
+      --surface: #1B2746;
+      --surface-sunken: #121B30;
+      --ink: #EEF0F6;
+      --ink-muted: #9AA3B8;
+      --ink-faint: #6E7690;
+      --border: #263252;
+      --primary: #6E97E8;
+      --primary-deep: #30488C;
+      --primary-soft: #1B2A4C;
+      --accent: #DCBB70;
+      --accent-soft: #332A14;
+      --success: #49B883;
+      --success-soft: #11291F;
+      --warning: #E0A354;
+      --warning-soft: #2E220F;
+      --danger: #E27A60;
+      --danger-soft: #311B15;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: Inter, system-ui, -apple-system, Segoe UI, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    padding: 20px 20px 48px;
+  }
+  .wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+
+  h1, h2, h3 { font-family: Sora, Inter, sans-serif; margin: 0; text-wrap: balance; }
+  .tabular { font-variant-numeric: tabular-nums; }
+  a { color: var(--primary); }
+  button:focus-visible, a:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+  /* ---------- Header ---------- */
+  .header { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+  .brand-mark {
+    flex: none; width: 44px; height: 44px; border-radius: 12px;
+    background: linear-gradient(145deg, var(--primary), var(--primary-deep));
+    color: var(--accent-soft);
+    display: flex; align-items: center; justify-content: center;
+    font-family: Sora; font-weight: 700; font-size: 15px; letter-spacing: .02em;
+    box-shadow: var(--shadow);
+  }
+  .header-text { flex: 1; min-width: 220px; }
+  .header-text h1 { font-size: 22px; font-weight: 700; color: var(--ink); }
+  .header-text p { margin: 3px 0 0; color: var(--ink-muted); font-size: 13px; max-width: 50ch; }
+
+  /* ---------- Visão geral (hero) ---------- */
+  .overview {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+    padding: 22px 24px; box-shadow: var(--shadow);
+    display: flex; align-items: center; gap: 28px; flex-wrap: wrap;
+  }
+  .ring-block { flex: none; display: flex; align-items: center; gap: 16px; }
+  .ring { position: relative; width: 108px; height: 108px; flex: none; }
+  .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring circle { fill: none; stroke-width: 10; }
+  .ring .ring-track { stroke: var(--surface-sunken); }
+  .ring .ring-value { stroke: var(--primary); stroke-linecap: round; transition: stroke-dashoffset .5s ease; }
+  .ring-center {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .ring-center strong { font-family: Sora; font-size: 24px; font-weight: 700; color: var(--ink); line-height: 1; }
+  .ring-center span { font-size: 10px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
+  .ring-caption { display: flex; flex-direction: column; gap: 2px; }
+  .ring-caption strong { font-family: Sora; font-size: 15px; }
+  .ring-caption span { font-size: 12px; color: var(--ink-muted); }
+  .ring-caption .atualizado { font-size: 11px; color: var(--ink-faint); margin-top: 2px; }
+
+  .stat-row { display: flex; gap: 10px; flex: 1; min-width: 260px; flex-wrap: wrap; }
+  .stat-tile {
+    flex: 1 1 110px; background: var(--surface-sunken); border: 1px solid var(--border);
+    border-left: 3px solid var(--border); border-radius: 11px; padding: 10px 13px;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .stat-tile strong { font-family: Sora; font-size: 21px; font-weight: 700; color: var(--ink); }
+  .stat-tile span { font-size: 11.5px; color: var(--ink-muted); font-weight: 500; }
+
+  /* ---------- Board / visualizações ---------- */
+  .board-section {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    padding: 18px 20px 20px; box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .section-head span { font-size: 12px; color: var(--ink-muted); }
+
+  .view-tabs { display: flex; gap: 4px; background: var(--surface-sunken); border: 1px solid var(--border); border-radius: 10px; padding: 3px; width: fit-content; }
+  .view-tab {
+    border: none; background: transparent; color: var(--ink-muted);
+    font: inherit; font-size: 12.5px; font-weight: 600; padding: 6px 13px; border-radius: 7px; cursor: pointer;
+  }
+  .view-tab[aria-pressed="true"] { background: var(--surface); color: var(--primary); box-shadow: var(--shadow); }
+  .view-tab:hover:not([aria-pressed="true"]) { color: var(--ink); }
+
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700;
+    padding: 2px 9px 2px 7px; border-radius: 999px; white-space: nowrap;
+  }
+  .status-pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  /* ---------- Linha do tempo ---------- */
+  .timeline { display: flex; flex-direction: column; }
+  .timeline-month {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--ink-faint); padding: 14px 0 8px 32px;
+  }
+  .timeline-month:first-child { padding-top: 0; }
+  .timeline-row { display: flex; gap: 14px; padding-left: 10px; }
+  .timeline-rail { flex: none; width: 22px; display: flex; flex-direction: column; align-items: center; }
+  .timeline-node { width: 11px; height: 11px; border-radius: 50%; margin-top: 15px; flex: none; box-shadow: 0 0 0 3px var(--surface); }
+  .timeline-line { width: 2px; flex: 1; background: var(--border); margin-top: 2px; }
+  .timeline-row:last-child .timeline-line { display: none; }
+  .timeline-content {
+    flex: 1; padding: 11px 0 20px; border-bottom: 1px solid var(--border); min-width: 0;
+    display: flex; flex-direction: column; gap: 5px;
+  }
+  .timeline-row:last-child .timeline-content { border-bottom: none; padding-bottom: 4px; }
+  .timeline-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .timeline-top b { font-family: Sora; font-size: 13.5px; }
+  .timeline-date { font-size: 11px; color: var(--ink-faint); flex: none; font-variant-numeric: tabular-nums; }
+  .timeline-desc { font-size: 12.5px; color: var(--ink-muted); }
+  .timeline-foot { display: flex; align-items: center; gap: 10px; }
+  .timeline-foot a { font-size: 11px; font-weight: 600; text-decoration: none; }
+  .timeline-foot a:hover { text-decoration: underline; }
+
+  /* ---------- Lista ---------- */
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; }
+  table.list-table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 560px; }
+  table.list-table th {
+    text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--ink-faint); font-weight: 700; padding: 10px 14px; background: var(--surface-sunken);
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  table.list-table th button {
+    font: inherit; font-size: inherit; font-weight: inherit; letter-spacing: inherit; text-transform: inherit;
+    color: inherit; background: none; border: none; cursor: pointer; padding: 0; display: inline-flex; align-items: center; gap: 4px;
+  }
+  table.list-table th button:hover { color: var(--primary); }
+  table.list-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.list-table tbody tr:last-child td { border-bottom: none; }
+  table.list-table tbody tr:hover { background: var(--surface-sunken); }
+  table.list-table .col-titulo { font-family: Sora; font-weight: 600; max-width: 320px; }
+  table.list-table .col-titulo small { display: block; font-family: Inter; font-weight: 400; color: var(--ink-muted); margin-top: 2px; }
+  table.list-table .tabular { color: var(--ink-muted); }
+
+  .board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 860px) { .board { grid-template-columns: 1fr; } }
+  .column {
+    background: var(--surface-sunken); border: 1px solid var(--border); border-top-width: 3px;
+    border-radius: 14px; padding: 13px;
+    display: flex; flex-direction: column; gap: 10px; min-height: 120px;
+  }
+  .column-head { display: flex; align-items: center; justify-content: space-between; padding: 0 2px; }
+  .column-head h2 { font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-muted); }
+  .count-badge {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
+    font-size: 11.5px; font-weight: 700; padding: 1px 8px; color: var(--ink-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .card-empty { font-size: 12.5px; color: var(--ink-faint); padding: 10px 4px; text-align: center; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 13px;
+    padding: 12px 13px; box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .card-title { font-family: Sora; font-weight: 600; font-size: 13.5px; color: var(--ink); text-wrap: balance; }
+  .card-desc { font-size: 12.5px; color: var(--ink-muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .card-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--ink-faint); }
+  .card-meta a { text-decoration: none; font-weight: 600; }
+  .card-meta a:hover { text-decoration: underline; }
+  .prio-badge {
+    font-size: 10.5px; font-weight: 700; color: var(--accent); background: var(--accent-soft);
+    padding: 1px 7px; border-radius: 999px; font-variant-numeric: tabular-nums;
+  }
+
+  details.recusados { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 4px 16px; }
+  details.recusados summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--ink-muted); padding: 10px 0; }
+  .recusados-list { display: flex; flex-direction: column; gap: 8px; padding: 0 0 12px; }
+  .recusado-item { font-size: 12.5px; color: var(--ink-muted); border-top: 1px dashed var(--border); padding-top: 8px; }
+  .recusado-item b { color: var(--ink); }
+
+  footer { text-align: center; font-size: 11.5px; color: var(--ink-faint); padding-top: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div class="brand-mark">ABE</div>
+    <div class="header-text">
+      <h1>Cronograma — Painel Gerencial</h1>
+      <p>Fases e entregas do Painel Gerencial do Grupo ABE — o que já saiu, o que está em andamento e o que vem a seguir. Cada sistema da casa tem o seu próprio cronograma; este é só deste.</p>
+    </div>
+  </div>
+
+  <div class="overview">
+    <div class="ring-block">
+      <div class="ring" role="img" id="ring-wrap">
+        <svg viewBox="0 0 120 120">
+          <circle class="ring-track" cx="60" cy="60" r="50"></circle>
+          <circle class="ring-value" id="ring-value" cx="60" cy="60" r="50"></circle>
+        </svg>
+        <div class="ring-center">
+          <strong id="progress-pct">—</strong>
+          <span>concluído</span>
+        </div>
+      </div>
+      <div class="ring-caption">
+        <strong>Progresso geral</strong>
+        <span id="progress-sub">—</span>
+        <span class="atualizado" id="atualizado-em">—</span>
+      </div>
+    </div>
+    <div class="stat-row" id="stat-row"></div>
+  </div>
+
+  <div class="board-section">
+    <div class="section-head">
+      <div class="view-tabs" id="view-tabs" role="tablist" aria-label="Tipo de visualização">
+        <button class="view-tab" type="button" data-view="board" aria-pressed="true">Quadro</button>
+        <button class="view-tab" type="button" data-view="timeline" aria-pressed="false">Linha do tempo</button>
+        <button class="view-tab" type="button" data-view="table" aria-pressed="false">Lista</button>
+      </div>
+      <span id="board-resumo"></span>
+    </div>
+    <div class="board" id="board"></div>
+    <div class="timeline" id="timeline" hidden></div>
+    <div class="table-wrap" id="table-wrap" hidden>
+      <table class="list-table">
+        <thead>
+          <tr>
+            <th><button type="button" data-sort="titulo">Item</button></th>
+            <th><button type="button" data-sort="status">Status</button></th>
+            <th><button type="button" data-sort="prioridade">Prioridade</button></th>
+            <th><button type="button" data-sort="atualizadoEm">Atualizado</button></th>
+            <th>Evidência</th>
+          </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <details class="recusados" id="recusados-wrap" hidden>
+    <summary>Itens recusados</summary>
+    <div class="recusados-list" id="recusados-list"></div>
+  </details>
+
+  <footer>
+    Página estática do projeto — <code>apps/web/public/cronograma.html</code>, editada diretamente a cada atualização.
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var STATUS = {
+    FILA: { rotulo: 'Fila', cor: 'var(--ink-muted)' },
+    EM_EXECUCAO: { rotulo: 'Em execução', cor: 'var(--primary)' },
+    CONCLUIDO: { rotulo: 'Concluído', cor: 'var(--success)' },
+    RECUSADO: { rotulo: 'Recusado', cor: 'var(--danger)' }
+  };
+  var STATUS_BG = {
+    FILA: 'var(--surface-sunken)', EM_EXECUCAO: 'var(--primary-soft)',
+    CONCLUIDO: 'var(--success-soft)', RECUSADO: 'var(--danger-soft)'
+  };
+
+  /** Dado real — todo o histórico de commits do repositório (git log
+   * completo, 15 commits em 2026-11-05), mantido à mão diretamente neste
+   * arquivo a cada atualização. Commits de estabilização do mesmo dia
+   * (formatação, build da Vercel, CSP) ficam agrupados num item só para o
+   * cronograma não virar ruído — nenhum commit fica de fora, só agrupado. */
+  var ITENS = [
+    { titulo: 'Estrutura inicial do monorepo', descricao: 'Primeira versão: admin, cadastro de credores e dashboard do cliente.', status: 'CONCLUIDO', evidenciaCommit: 'f22b8a9', atualizadoEm: '2026-06-24' },
+    { titulo: 'Migração da stack para Supabase', descricao: 'Saída do backend NestJS legado — Auth, Postgres e RLS do Supabase viraram a base de tudo (ADR-0001, ADR-0003).', status: 'CONCLUIDO', evidenciaCommit: '8f42e68', atualizadoEm: '2026-06-24' },
+    { titulo: 'Estabilização do primeiro deploy na Vercel', descricao: 'Build quebrando, CSP bloqueando o login, tela em branco em produção — 4 correções no mesmo dia até o deploy ficar estável.', status: 'CONCLUIDO', evidenciaCommit: '024e679', atualizadoEm: '2026-06-24' },
+    { titulo: 'Grupo de códigos no admin, dashboard ABE WEB e hardening de segurança', descricao: 'Credor passa a ter vários códigos de cliente agrupados; dashboard ganha a origem ABE WEB; reforço de segurança geral.', status: 'CONCLUIDO', evidenciaCommit: '87e5a78', atualizadoEm: '2026-06-26' },
+    { titulo: 'Regra única de cálculo e visão consolidada da diretoria', descricao: 'Uma função só de cálculo para todo o sistema (fim da divergência entre dashboard e diretoria) e o painel consolidado de todos os credores.', status: 'CONCLUIDO', evidenciaCommit: 'f9ad4f5', atualizadoEm: '2026-09-09' },
+    { titulo: 'Botão de atualizar com recálculo de todos os credores', descricao: 'Uma chamada só reprocessa os agregados de todos os credores, em vez de um de cada vez.', status: 'CONCLUIDO', evidenciaCommit: '50aa87a', atualizadoEm: '2026-09-09' },
+    { titulo: 'Filtro de credor com seleção múltipla na diretoria', descricao: 'A diretoria passa a filtrar vários credores ao mesmo tempo, não só um por vez.', status: 'CONCLUIDO', evidenciaCommit: '89d220f', atualizadoEm: '2026-09-09' },
+    { titulo: 'Ajuste de CI: .env efêmero no cron de sincronização ABE WEB', descricao: 'O workflow de sync passa a gerar suas próprias variáveis de ambiente antes de rodar, sem depender de segredo fixo no runner.', status: 'CONCLUIDO', evidenciaCommit: '9fce3f7', atualizadoEm: '2026-11-04' },
+    { titulo: 'Protótipo do Construtor de Relatórios com IA validado e congelado', descricao: 'Protótipo com dado sintético aprovado pelo usuário e congelado como especificação antes do código — método do projeto.', status: 'CONCLUIDO', evidenciaCommit: '275fe4a', atualizadoEm: '2026-11-04' },
+    { titulo: 'Backend do Construtor de Relatórios com IA', descricao: 'Config global, chave da OpenAI no Supabase Vault, cota diária e auditoria de toda pergunta.', status: 'CONCLUIDO', evidenciaCommit: '5bf5d3c', atualizadoEm: '2026-11-04' },
+    { titulo: 'Frontend do Construtor de Relatórios com IA', descricao: 'Credor pergunta em português sobre a própria carteira; a IA monta o plano, a rota valida e devolve cards, gráfico e tabela com os mesmos cálculos do dashboard.', status: 'CONCLUIDO', evidenciaCommit: '30ba856', atualizadoEm: '2026-11-05' },
+    { titulo: 'Correção: prévia de SUPER_ADMIN perdia o cliente no menu', descricao: 'O menu lateral descartava o credorId da prévia ao navegar para Relatórios, devolvendo "Credor não encontrado".', status: 'CONCLUIDO', evidenciaCommit: '1fa4958', atualizadoEm: '2026-11-05' },
+    { titulo: 'Datas da tela de relatórios = mínimo/máximo real da base', descricao: 'Início/fim já vêm preenchidos com o intervalo de dados que o credor realmente tem, e o filtro de sistema de origem saiu da tela. Ainda não commitado.', status: 'EM_EXECUCAO', prioridade: 1, atualizadoEm: '2026-11-05' },
+    { titulo: 'Cronograma de desenvolvimento (esta página)', descricao: 'Página estática no próprio projeto, com visão geral, quadro, linha do tempo e lista — editada diretamente, sem passar por publicação externa.', status: 'EM_EXECUCAO', prioridade: 2, atualizadoEm: '2026-11-05' },
+    { titulo: 'Quadro de relatórios arrastável (BI self-service)', descricao: 'Credor monta o próprio painel arrastando widgets (cartão, gráfico, tabela) sobre o Construtor de Relatórios já existente.', status: 'FILA', prioridade: 3, atualizadoEm: '2026-11-05' }
+  ];
+
+  var state = { view: 'board', sortCol: 'atualizadoEm', sortDir: 'desc' };
+  var MESES_LONGOS = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  var CIRC = 2 * Math.PI * 50;
+
+  function el(tag, attrs, children) {
+    var node = document.createElement(tag);
+    attrs = attrs || {};
+    Object.keys(attrs).forEach(function (k) {
+      if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]);
+      else node.setAttribute(k, attrs[k]);
+    });
+    (children || []).forEach(function (c) { if (c) node.appendChild(c); });
+    return node;
+  }
+  function text(s) { return document.createTextNode(s); }
+  function fmtData(iso) {
+    if (!iso) return '';
+    var d = new Date(iso + 'T00:00:00');
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', timeZone: 'America/Sao_Paulo' });
+  }
+  function rotuloMes(iso) {
+    var d = new Date(iso + 'T00:00:00');
+    return MESES_LONGOS[d.getMonth()] + ' de ' + d.getFullYear();
+  }
+  function statusPill(statusId) {
+    var s = STATUS[statusId] || STATUS.FILA;
+    var span = el('span', { class: 'status-pill' }, [text(s.rotulo)]);
+    span.style.color = s.cor;
+    span.style.background = STATUS_BG[statusId] || 'var(--surface-sunken)';
+    return span;
+  }
+  function evidenciaLink(item) {
+    if (!item.evidenciaCommit) return null;
+    var a = el('a', { href: '#' }, [text('#' + item.evidenciaCommit)]);
+    a.style.color = 'var(--primary)';
+    a.addEventListener('click', function (e) { e.preventDefault(); });
+    return a;
+  }
+
+  function itemCard(item) {
+    var meta = el('div', { class: 'card-meta' }, [
+      el('span', {}, [text(item.atualizadoEm ? fmtData(item.atualizadoEm) : '')])
+    ]);
+    var link = evidenciaLink(item);
+    if (link) meta.appendChild(link);
+    else if (typeof item.prioridade === 'number') {
+      meta.appendChild(el('span', { class: 'prio-badge' }, [text('prioridade ' + item.prioridade)]));
+    }
+    return el('div', { class: 'card' }, [
+      el('div', { class: 'card-top' }, [el('span', { class: 'card-title' }, [text(item.titulo)])]),
+      el('p', { class: 'card-desc' }, [text(item.descricao || '')]),
+      meta
+    ]);
+  }
+
+  function itensAtivos() { return ITENS.filter(function (i) { return i.status !== 'RECUSADO'; }); }
+
+  function renderProgresso() {
+    var itens = itensAtivos();
+    var total = itens.length;
+    var concluidos = itens.filter(function (i) { return i.status === 'CONCLUIDO'; }).length;
+    var emExec = itens.filter(function (i) { return i.status === 'EM_EXECUCAO'; }).length;
+    var fila = itens.filter(function (i) { return i.status === 'FILA'; }).length;
+    var pct = total ? Math.round((concluidos / total) * 100) : 0;
+
+    document.getElementById('progress-pct').textContent = total ? pct + '%' : '—';
+    document.getElementById('progress-sub').textContent = total ? (concluidos + ' de ' + total + ' itens concluídos') : 'Nenhum item ainda';
+
+    var maisRecente = itens.reduce(function (acc, i) { return (!acc || (i.atualizadoEm || '') > acc) ? i.atualizadoEm : acc; }, null);
+    document.getElementById('atualizado-em').textContent = maisRecente ? ('Atualizado em ' + fmtData(maisRecente)) : '';
+
+    var ring = document.getElementById('ring-value');
+    var offset = CIRC * (1 - (total ? pct / 100 : 0));
+    ring.setAttribute('stroke-dasharray', CIRC.toFixed(2));
+    ring.setAttribute('stroke-dashoffset', offset.toFixed(2));
+    document.getElementById('ring-wrap').setAttribute('aria-label', concluidos + ' de ' + total + ' itens concluídos (' + pct + '%)');
+
+    var statRow = document.getElementById('stat-row');
+    statRow.innerHTML = '';
+    function tile(cor, rotulo, n) {
+      var t = el('div', { class: 'stat-tile' }, [el('strong', { class: 'tabular' }, [text(String(n))]), el('span', {}, [text(rotulo)])]);
+      t.style.borderLeftColor = cor;
+      statRow.appendChild(t);
+    }
+    tile('var(--success)', 'Concluído', concluidos);
+    tile('var(--primary)', 'Em execução', emExec);
+    tile('var(--ink-muted)', 'Na fila', fila);
+  }
+
+  function renderBoard() {
+    var board = document.getElementById('board');
+    board.innerHTML = '';
+    var total = itensAtivos().length;
+    document.getElementById('board-resumo').textContent = total + (total === 1 ? ' item' : ' itens');
+
+    ['FILA', 'EM_EXECUCAO', 'CONCLUIDO'].forEach(function (statusId) {
+      var lista = itensAtivos()
+        .filter(function (i) { return i.status === statusId; })
+        .sort(function (a, b) {
+          if (statusId === 'FILA') return (a.prioridade || 99) - (b.prioridade || 99);
+          return (a.atualizadoEm || '') < (b.atualizadoEm || '') ? 1 : -1;
+        });
+      var col = el('div', { class: 'column' });
+      col.style.borderTopColor = STATUS[statusId].cor;
+      col.appendChild(el('div', { class: 'column-head' }, [
+        el('h2', {}, [text(STATUS[statusId].rotulo)]),
+        el('span', { class: 'count-badge' }, [text(String(lista.length))])
+      ]));
+      if (lista.length === 0) col.appendChild(el('div', { class: 'card-empty' }, [text('Nada aqui no momento.')]));
+      else lista.forEach(function (item) { col.appendChild(itemCard(item)); });
+      board.appendChild(col);
+    });
+  }
+
+  function renderTimeline() {
+    var wrap = document.getElementById('timeline');
+    wrap.innerHTML = '';
+    var itens = itensAtivos().filter(function (i) { return i.atualizadoEm; })
+      .slice().sort(function (a, b) { return a.atualizadoEm < b.atualizadoEm ? 1 : -1; });
+
+    if (!itens.length) { wrap.appendChild(el('div', { class: 'card-empty' }, [text('Nada por aqui ainda.')])); return; }
+
+    var mesAtual = null;
+    itens.forEach(function (item) {
+      var mes = rotuloMes(item.atualizadoEm);
+      if (mes !== mesAtual) { wrap.appendChild(el('div', { class: 'timeline-month' }, [text(mes)])); mesAtual = mes; }
+      var node = el('div', { class: 'timeline-node' });
+      node.style.background = STATUS[item.status].cor;
+      var rail = el('div', { class: 'timeline-rail' }, [node, el('div', { class: 'timeline-line' })]);
+      var foot = el('div', { class: 'timeline-foot' }, [statusPill(item.status)]);
+      var link = evidenciaLink(item);
+      if (link) foot.appendChild(link);
+      var content = el('div', { class: 'timeline-content' }, [
+        el('div', { class: 'timeline-top' }, [el('b', {}, [text(item.titulo)]), el('span', { class: 'timeline-date tabular' }, [text(fmtData(item.atualizadoEm))])]),
+        el('p', { class: 'timeline-desc' }, [text(item.descricao || '')]),
+        foot
+      ]);
+      wrap.appendChild(el('div', { class: 'timeline-row' }, [rail, content]));
+    });
+  }
+
+  function renderTabela() {
+    var tbody = document.getElementById('table-body');
+    tbody.innerHTML = '';
+    var itens = itensAtivos().slice();
+    var col = state.sortCol, dir = state.sortDir === 'asc' ? 1 : -1;
+    itens.sort(function (a, b) {
+      if (col === 'prioridade') {
+        var av = a.prioridade == null ? 999 : a.prioridade, bv = b.prioridade == null ? 999 : b.prioridade;
+        return (av - bv) * dir;
+      }
+      var at = (a[col] || '').toString().toLowerCase(), bt = (b[col] || '').toString().toLowerCase();
+      if (at < bt) return -1 * dir;
+      if (at > bt) return 1 * dir;
+      return 0;
+    });
+    document.querySelectorAll('table.list-table th button').forEach(function (btn) {
+      btn.parentElement.style.color = btn.dataset.sort === col ? 'var(--primary)' : '';
+    });
+    if (!itens.length) {
+      tbody.appendChild(el('tr', {}, [el('td', { colspan: '5', class: 'card-empty' }, [text('Nada por aqui ainda.')])]));
+      return;
+    }
+    itens.forEach(function (item) {
+      var link = evidenciaLink(item);
+      tbody.appendChild(el('tr', {}, [
+        el('td', { class: 'col-titulo' }, [text(item.titulo), el('small', {}, [text(item.descricao || '')])]),
+        el('td', {}, [statusPill(item.status)]),
+        el('td', { class: 'tabular' }, [text(item.prioridade != null ? String(item.prioridade) : '—')]),
+        el('td', { class: 'tabular' }, [text(item.atualizadoEm ? fmtData(item.atualizadoEm) : '—')]),
+        el('td', {}, link ? [link] : [text('—')])
+      ]));
+    });
+  }
+
+  function renderRecusados() {
+    var itens = ITENS.filter(function (i) { return i.status === 'RECUSADO'; });
+    var wrap = document.getElementById('recusados-wrap');
+    var list = document.getElementById('recusados-list');
+    list.innerHTML = '';
+    if (!itens.length) { wrap.hidden = true; return; }
+    wrap.hidden = false;
+    itens.forEach(function (i) {
+      list.appendChild(el('div', { class: 'recusado-item' }, [el('b', {}, [text(i.titulo + ' ')]), text(i.motivoRecusa ? '— ' + i.motivoRecusa : '')]));
+    });
+  }
+
+  function render() { renderProgresso(); renderBoard(); renderTimeline(); renderTabela(); renderRecusados(); }
+
+  var paineisPorView = { board: 'board', timeline: 'timeline', table: 'table-wrap' };
+  document.querySelectorAll('.view-tab').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      state.view = btn.dataset.view;
+      document.querySelectorAll('.view-tab').forEach(function (b) { b.setAttribute('aria-pressed', String(b === btn)); });
+      Object.keys(paineisPorView).forEach(function (view) {
+        document.getElementById(paineisPorView[view]).hidden = view !== state.view;
+      });
+    });
+  });
+  document.querySelectorAll('table.list-table th button[data-sort]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var col = btn.dataset.sort;
+      if (state.sortCol === col) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+      else { state.sortCol = col; state.sortDir = 'asc'; }
+      renderTabela();
+    });
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

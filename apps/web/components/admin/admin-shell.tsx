@@ -3,7 +3,17 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Building2, ChevronRight, LogOut, Menu, Shield, TrendingUp, Users, X } from 'lucide-react';
+import {
+  Building2,
+  ChevronRight,
+  LogOut,
+  Menu,
+  Settings,
+  Shield,
+  TrendingUp,
+  Users,
+  X,
+} from 'lucide-react';
 import { Logo } from '@/components/brand/logo';
 import { LoadingScreen } from '@/components/ui/loading-screen';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
@@ -16,6 +26,12 @@ const NAV = [
   { label: 'Diretoria', href: '/admin/diretoria', icon: TrendingUp, match: '/admin/diretoria' },
   { label: 'Credores', href: '/admin/credores', icon: Building2, match: '/admin/credores' },
   { label: 'Usuários', href: '/admin/usuarios', icon: Users, match: '/admin/usuarios' },
+  {
+    label: 'Configurações',
+    href: '/admin/configuracoes',
+    icon: Settings,
+    match: '/admin/configuracoes',
+  },
 ];
 
 function pageMeta(pathname: string): { title: string; subtitle: string; banner: string } {
@@ -66,6 +82,14 @@ function pageMeta(pathname: string): { title: string; subtitle: string; banner: 
       title: 'Usuários',
       subtitle: 'Contas ativas e hierarquia de acesso',
       banner: 'Gerencie logins, permissões e status de acesso ao painel.',
+    };
+  }
+  if (pathname.startsWith('/admin/configuracoes')) {
+    return {
+      title: 'Configurações · Agente de relatórios',
+      subtitle: 'Regra global — vale para todos os clientes do Grupo ABE',
+      banner:
+        'Configure o provedor de IA e as regras do agente de relatórios — vale para todos os clientes do Grupo ABE.',
     };
   }
   return {

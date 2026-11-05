@@ -144,7 +144,12 @@ export function GlobalFilters({
   );
 }
 
-function FilterField({
+/**
+ * Exportado para a tela de relatórios usar o MESMO campo de filtro.
+ * Dois campos parecidos em duas telas da mesma área divergem na primeira
+ * mexida, e o usuário lê isso como "é outra coisa".
+ */
+export function FilterField({
   label,
   icon: Icon,
   hint,
@@ -169,8 +174,8 @@ function FilterField({
   );
 }
 
-const inputClass =
+export const inputClass =
   'w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground/60 focus:border-primary focus:ring-4 focus:ring-primary/15';
 
-const selectClass =
+export const selectClass =
   'w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/15';

@@ -16,6 +16,17 @@ export interface ApiError {
   errors?: string[];
   /** Identificador para correlacionar com os logs do servidor. */
   traceId?: string;
+  /**
+   * Código estável do erro, quando a rota o informa (ex.: `LIMITE_DIARIO_EXCEDIDO`).
+   * A tela decide o que oferecer a partir dele; `title` continua sendo o texto lido.
+   */
+  codigo?: string;
+  /**
+   * Mesma ideia de `errors`, no nome que as rotas do agente de relatórios usam.
+   * Sem este campo o motivo da recusa de um plano morria no servidor e a tela
+   * só dizia "não consegui", que não ajuda ninguém a reformular a pergunta.
+   */
+  detalhes?: string[];
 }
 
 /** Garante que qualquer valor capturado vire um ApiError com mensagem legível. */
@@ -53,6 +64,8 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
       status: response.status,
       errors: body?.errors,
       traceId: body?.traceId,
+      codigo: body?.codigo,
+      detalhes: body?.detalhes,
     } satisfies ApiError;
   }
 

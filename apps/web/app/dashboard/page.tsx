@@ -1,25 +1,18 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
-  BarChart3,
-  ChevronRight,
   Eye,
   FileInput,
   Handshake,
-  LayoutDashboard,
   LogOut,
   Menu,
   Radio,
-  Search,
-  Settings,
   ShieldCheck,
   TrendingUp,
-  Users,
-  Wallet,
   X,
 } from 'lucide-react';
 import { LoadingScreen } from '@/components/ui/loading-screen';
@@ -44,6 +37,7 @@ import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { FormattedDate } from '@/components/ui/formatted-date';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { GlobalFilters } from '@/components/dashboard/global-filters';
+import { NavCredor } from '@/components/dashboard/nav-credor';
 import { KpiSection } from '@/components/dashboard/kpi-section';
 import { CarteiraDonut, ComposicaoAtores } from '@/components/dashboard/charts/carteira-charts';
 import {
@@ -53,15 +47,6 @@ import {
   FaixaIdadeChart,
 } from '@/components/dashboard/charts/periodo-charts';
 import { AcordosTable, BaixasTable } from '@/components/dashboard/detail-tables';
-
-const NAV = [
-  { label: 'Visão geral', icon: LayoutDashboard, active: true },
-  { label: 'Carteira', icon: Wallet },
-  { label: 'Busca de devedor', icon: Search },
-  { label: 'Relatórios', icon: BarChart3 },
-  { label: 'Usuários', icon: Users },
-  { label: 'Configurações', icon: Settings },
-];
 
 export default function DashboardPage() {
   return (
@@ -73,6 +58,7 @@ export default function DashboardPage() {
 
 function DashboardContent() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   /** Prévia do painel de um credor — só o SUPER_ADMIN consegue usar (API valida). */
   const credorIdParam = searchParams.get('credorId');
@@ -208,28 +194,9 @@ function DashboardContent() {
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto p-4">
-          <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Menu
-          </p>
-          {NAV.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
-                item.active
-                  ? 'bg-primary text-primary-foreground shadow-soft'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-              }`}
-            >
-              <item.icon
-                className={`h-5 w-5 transition-transform duration-200 ${
-                  item.active ? '' : 'group-hover:scale-110'
-                }`}
-              />
-              {item.label}
-              {item.active && <ChevronRight className="ml-auto h-4 w-4" />}
-            </button>
-          ))}
+          {/* O menu mora em `nav-credor.tsx` — esta tela e `/dashboard/relatorios`
+              mostram a MESMA lista, e uma lista só não pode divergir da outra. */}
+          <NavCredor pathname={pathname} onNavegar={() => setMenuAberto(false)} />
         </nav>
 
         <div className="space-y-3 border-t border-border p-4">

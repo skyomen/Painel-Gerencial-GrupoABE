@@ -18,6 +18,7 @@ import {
   excedeuCota,
   hojeIsoSaoPaulo,
   inteiroDaQuery,
+  obterIntervaloDisponivel,
   primeiroDiaMesesAtrasSaoPaulo,
   registrarAuditoria,
   resumirResposta,
@@ -364,12 +365,18 @@ export async function GET(request: Request) {
   // O `.eq('tenant_id')` explícito existe porque para o SUPER_ADMIN a RLS
   // libera tudo — sem ele, a prévia de um credor mostraria o histórico da casa
   // inteira numa tela que diz "suas perguntas recentes".
-  const { data, error } = await sessao.supabase
-    .from('agente_relatorios_perguntas')
-    .select('id, pergunta_texto, criado_em, tipo_relatorio, status, usuarios ( nome )')
-    .eq('tenant_id', sessao.tenantId)
-    .order('criado_em', { ascending: false })
-    .limit(limite);
+  //
+  // O intervalo de datas disponível roda em paralelo: é uma leitura
+  // independente do histórico, e as duas usam o mesmo client RLS do credor.
+  const [{ data, error }, intervaloDisponivel] = await Promise.all([
+    sessao.supabase
+      .from('agente_relatorios_perguntas')
+      .select('id, pergunta_texto, criado_em, tipo_relatorio, status, usuarios ( nome )')
+      .eq('tenant_id', sessao.tenantId)
+      .order('criado_em', { ascending: false })
+      .limit(limite),
+    obterIntervaloDisponivel(sessao.supabase, sessao.credor.id),
+  ]);
 
   if (error) {
     console.error('[relatorios/perguntar GET]', error);
@@ -390,5 +397,5 @@ export async function GET(request: Request) {
     status: linha.status,
   }));
 
-  return NextResponse.json({ perguntas });
+  return NextResponse.json({ perguntas, intervaloDisponivel });
 }

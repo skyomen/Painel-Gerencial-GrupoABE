@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -9,7 +9,6 @@ import {
   History,
   Loader2,
   MapPin,
-  Radio,
   Send,
   Sparkles,
   Calendar,
@@ -45,7 +44,6 @@ import {
   type ContextoPergunta,
   type PerguntaRecente,
   type RespostaPergunta,
-  type SistemaOrigem,
 } from '@/lib/relatorios-api';
 import { nomeArquivoCsv, tabelaParaCsv } from '@/lib/relatorios-visualizacao';
 
@@ -74,12 +72,6 @@ export default function RelatoriosPage() {
   );
 }
 
-const SISTEMAS: { valor: SistemaOrigem; rotulo: string }[] = [
-  { valor: 'TODOS', rotulo: 'Todos' },
-  { valor: 'ABE_WEB', rotulo: 'ABE WEB' },
-  { valor: 'DELPHI', rotulo: 'Delphi' },
-];
-
 /** Uma sugestão por tipo do catálogo — todas respondíveis hoje, nenhuma promessa. */
 const SUGESTOES = [
   'Quanto da minha carteira ainda está em aberto?',
@@ -91,14 +83,12 @@ const SUGESTOES = [
 ];
 
 interface FiltrosConsulta {
-  sistemaOrigem: SistemaOrigem;
   inicio: string;
   fim: string;
   uf: string;
 }
 
 const FILTROS_INICIAIS: FiltrosConsulta = {
-  sistemaOrigem: 'TODOS',
   inicio: '',
   fim: '',
   uf: 'todos',
@@ -130,9 +120,40 @@ function Construtor({ user, credorIdParam }: { user: AuthUser; credorIdParam: st
   const [erro, setErro] = useState<ApiError | null>(null);
   const [recentes, setRecentes] = useState<PerguntaRecente[]>([]);
 
+  /**
+   * Valor mais recente de `filtros`, sem depender do `useCallback` abaixo
+   * recriar a função a cada digitação — `carregarRecentes` só recria quando
+   * `credorId` muda, então o `filtros` fechado nela ficaria velho.
+   */
+  const filtrosRef = useRef(filtros);
+  useEffect(() => {
+    filtrosRef.current = filtros;
+  }, [filtros]);
+
+  /**
+   * Aplica o intervalo de datas real do credor uma única vez, na primeira
+   * resposta do histórico que chegar — e só se o usuário ainda não tiver
+   * tocado nos campos de data. Depois disso a escolha é dele.
+   */
+  const jaAplicouIntervaloRef = useRef(false);
+
   const carregarRecentes = useCallback(() => {
     listarPerguntasRecentes(credorId)
-      .then((r) => setRecentes(r.perguntas))
+      .then((r) => {
+        setRecentes(r.perguntas);
+
+        if (jaAplicouIntervaloRef.current) return;
+        jaAplicouIntervaloRef.current = true;
+
+        const aindaIntocado =
+          filtrosRef.current.inicio === FILTROS_INICIAIS.inicio &&
+          filtrosRef.current.fim === FILTROS_INICIAIS.fim;
+        const { inicio, fim } = r.intervaloDisponivel;
+
+        if (aindaIntocado && (inicio || fim)) {
+          atualizarFiltros({ inicio: inicio ?? '', fim: fim ?? '' });
+        }
+      })
       // O histórico é apoio: falhar nele não pode apagar a resposta na tela.
       .catch(() => setRecentes([]));
   }, [credorId]);
@@ -150,7 +171,7 @@ function Construtor({ user, credorIdParam }: { user: AuthUser; credorIdParam: st
     setPerguntando(true);
     setErro(null);
 
-    const contexto: ContextoPergunta = { sistemaOrigem: filtros.sistemaOrigem };
+    const contexto: ContextoPergunta = {};
     if (filtros.inicio || filtros.fim) {
       contexto.periodo = {
         ...(filtros.inicio ? { inicio: filtros.inicio } : {}),
@@ -178,43 +199,9 @@ function Construtor({ user, credorIdParam }: { user: AuthUser; credorIdParam: st
             <Filter className="h-4 w-4 text-primary" />
             <h2 className="text-sm font-semibold text-foreground">Filtros da consulta</h2>
           </div>
-          <span className="text-xs text-muted-foreground">
-            ABE WEB e Delphi são o mesmo credor — o sistema é só um recorte de onde o dado nasceu
-          </span>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <FilterField
-            label="Sistema de origem"
-            icon={Radio}
-            hint="Filtra pela origem do título — não muda o credor"
-          >
-            <div
-              role="group"
-              aria-label="Sistema de origem"
-              className="flex w-full gap-0.5 rounded-xl border border-border bg-muted/50 p-0.5"
-            >
-              {SISTEMAS.map((s) => {
-                const ativo = filtros.sistemaOrigem === s.valor;
-                return (
-                  <button
-                    key={s.valor}
-                    type="button"
-                    aria-pressed={ativo}
-                    onClick={() => atualizarFiltros({ sistemaOrigem: s.valor })}
-                    className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition-colors ${
-                      ativo
-                        ? 'bg-card text-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {s.rotulo}
-                  </button>
-                );
-              })}
-            </div>
-          </FilterField>
-
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <FilterField
             label="Data início"
             icon={Calendar}

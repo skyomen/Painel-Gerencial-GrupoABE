@@ -44,6 +44,12 @@ export interface PerguntaRecente {
   status: 'OK' | 'ERRO' | 'REJEITADO' | string;
 }
 
+/** Menor e maior `competencia` que o credor realmente tem nas tabelas de métricas mensais. */
+export interface IntervaloDisponivel {
+  inicio: string | null;
+  fim: string | null;
+}
+
 export function perguntarRelatorio(args: {
   pergunta: string;
   contexto?: ContextoPergunta;
@@ -62,9 +68,11 @@ export function perguntarRelatorio(args: {
 export function listarPerguntasRecentes(
   credorId?: string | null,
   limite = 10,
-): Promise<{ perguntas: PerguntaRecente[] }> {
+): Promise<{ perguntas: PerguntaRecente[]; intervaloDisponivel: IntervaloDisponivel }> {
   const params = new URLSearchParams({ limite: String(limite) });
   if (credorId) params.set('credorId', credorId);
 
-  return apiFetch<{ perguntas: PerguntaRecente[] }>(`/relatorios/perguntar?${params.toString()}`);
+  return apiFetch<{ perguntas: PerguntaRecente[]; intervaloDisponivel: IntervaloDisponivel }>(
+    `/relatorios/perguntar?${params.toString()}`,
+  );
 }

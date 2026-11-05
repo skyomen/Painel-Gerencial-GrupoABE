@@ -459,6 +459,85 @@ export async function agregarUsoMensal(
 }
 
 // =============================================================================
+// Intervalo de datas disponível
+// =============================================================================
+
+export interface IntervaloDisponivel {
+  inicio: string | null;
+  fim: string | null;
+}
+
+/**
+ * As 4 tabelas de métricas mensais do credor, todas com `competencia` e
+ * `credor_id` — a mesma lista de `carregarAgregados` em
+ * `lib/relatorios-ia/executor.ts`, menos `metricas_posicao` (snapshot de hoje,
+ * sem `competencia`).
+ */
+const TABELAS_COMPETENCIA = [
+  'metricas_mensais_bordero',
+  'metricas_mensais_repasse',
+  'metricas_mensais_classe',
+  'metricas_mensais_faixa',
+] as const;
+
+/**
+ * Menor e maior `competencia` que o credor realmente tem nas 4 tabelas de
+ * métricas mensais. Usado só para pré-preencher os campos de data da tela —
+ * metadado de UI, não cálculo de relatório. Por isso erro de uma tabela não
+ * derruba a função inteira: fica no log e aquela tabela simplesmente não
+ * participa da conta. Credor sem nenhuma linha em nenhuma tabela devolve
+ * `{ inicio: null, fim: null }`.
+ *
+ * Comparação de `competencia` é lexicográfica (string `'YYYY-MM-DD'`), que já
+ * é a ordem cronológica correta para esse formato.
+ */
+export async function obterIntervaloDisponivel(
+  supabase: SupabaseClient,
+  credorId: string,
+): Promise<IntervaloDisponivel> {
+  const consultas = TABELAS_COMPETENCIA.flatMap((tabela) => [
+    supabase
+      .from(tabela)
+      .select('competencia')
+      .eq('credor_id', credorId)
+      .order('competencia', { ascending: true })
+      .limit(1),
+    supabase
+      .from(tabela)
+      .select('competencia')
+      .eq('credor_id', credorId)
+      .order('competencia', { ascending: false })
+      .limit(1),
+  ]);
+
+  const resultados = await Promise.all(consultas);
+
+  let inicio: string | null = null;
+  let fim: string | null = null;
+
+  resultados.forEach((resultado, i) => {
+    const tabela = TABELAS_COMPETENCIA[Math.floor(i / 2)];
+    const ehMinimo = i % 2 === 0;
+
+    if (resultado.error) {
+      console.error('[agente-relatorios obterIntervaloDisponivel]', tabela, resultado.error);
+      return;
+    }
+
+    const linha = (resultado.data as { competencia: string }[] | null)?.[0];
+    if (!linha) return;
+
+    if (ehMinimo) {
+      if (inicio === null || linha.competencia < inicio) inicio = linha.competencia;
+    } else {
+      if (fim === null || linha.competencia > fim) fim = linha.competencia;
+    }
+  });
+
+  return { inicio, fim };
+}
+
+// =============================================================================
 // Leitura de query string
 // =============================================================================
 

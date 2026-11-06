@@ -134,7 +134,7 @@ export default function ConfiguracoesPage() {
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="mx-auto flex w-full max-w-[1280px] flex-wrap items-center gap-2">
         <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
           <ShieldCheck className="h-3 w-3" />
           Regra global — vale para todos os clientes do Grupo ABE
@@ -154,260 +154,282 @@ export default function ConfiguracoesPage() {
         </span>
       </div>
 
-      <div className="mx-auto w-full max-w-[900px] space-y-6">
-        {/* ---------------------------------------------------------- provedor */}
-        <Secao
-          titulo="Provedor de IA"
-          descricao="A chave nunca é exibida nem chega ao navegador do cliente."
-        >
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Campo rotulo="Provedor">
-              <FormSelect value={v.provedor} onChange={(valor) => mexer({ provedor: valor })}>
-                <option value="OPENAI">OpenAI</option>
-              </FormSelect>
-            </Campo>
-
-            <Campo rotulo="Modelo">
-              <FormInput value={v.modelo} onChange={(valor) => mexer({ modelo: valor })} />
-            </Campo>
-
-            <Campo rotulo="Chave de API" className="sm:col-span-2">
-              {config.chaveConfigurada && !trocandoChave ? (
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <output className="flex-1 rounded-xl border border-input bg-background px-3 py-2.5 text-sm tabular-nums text-muted-foreground">
-                    {config.chaveMascarada ?? 'Chave gravada'}
-                  </output>
-                  <button
-                    type="button"
-                    onClick={() => setTrocandoChave(true)}
-                    className="h-11 rounded-xl border border-border px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
-                  >
-                    Alterar chave
-                  </button>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <input
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => {
-                      setFeedback(null);
-                      setApiKey(e.target.value);
-                    }}
-                    autoComplete="off"
-                    spellCheck={false}
-                    placeholder="Cole a chave do provedor"
-                    aria-label="Nova chave de API"
-                    className="h-11 flex-1 rounded-xl border border-input bg-background px-3 text-sm outline-none transition-colors focus:border-primary focus:ring-4 focus:ring-primary/15"
-                  />
-                  {config.chaveConfigurada && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setApiKey('');
-                        setTrocandoChave(false);
-                      }}
-                      className="h-11 rounded-xl border border-border px-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    >
-                      Cancelar
-                    </button>
-                  )}
-                </div>
-              )}
-              <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                <KeyRound className="h-3.5 w-3.5 shrink-0" />
-                Guardada no Supabase Vault — nunca em texto plano.
-                {config.chaveAtualizadaEm &&
-                  ` Atualizada em ${new Date(config.chaveAtualizadaEm).toLocaleString('pt-BR')}.`}
-              </p>
-            </Campo>
-          </div>
-
-          <div className="mt-4 flex items-center justify-between gap-4 rounded-xl bg-muted/60 px-4 py-3">
-            <span className="text-sm font-medium text-foreground">
-              Agente de relatórios ativo para todos os clientes
-            </span>
-            <Interruptor
-              ligado={v.ativo}
-              rotulo="Agente de relatórios ativo para todos os clientes"
-              onChange={(ligado) => mexer({ ativo: ligado })}
-            />
-          </div>
-
-          {!config.chaveConfigurada && (
-            <p className="mt-3 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
-              Sem chave gravada o agente responde 503 a qualquer pergunta, mesmo ligado.
-            </p>
-          )}
-        </Secao>
-
-        {/* ------------------------------------------------------------ regras */}
-        <Secao
-          titulo="Regras do agente"
-          descricao="Aplicadas a toda pergunta, de todo credor — campos estruturados, não um texto solto, para dar pra auditar o que foi autorizado."
-        >
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Campo rotulo="Tom de voz">
-              <Segmentado
-                rotulo="Tom de voz"
-                valor={v.tomDeVoz}
-                opcoes={[
-                  { valor: 'FORMAL', rotulo: 'Formal' },
-                  { valor: 'CONSULTIVO', rotulo: 'Consultivo' },
-                  { valor: 'DIRETO', rotulo: 'Direto' },
-                ]}
-                onChange={(valor) => mexer({ tomDeVoz: valor })}
-              />
-            </Campo>
-
-            <Campo rotulo="Idioma de resposta">
-              <FormSelect value={v.idioma} onChange={(valor) => mexer({ idioma: valor })}>
-                <option value="pt-BR">Português (Brasil)</option>
-              </FormSelect>
-            </Campo>
-          </div>
-
-          <div className="mt-4">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              O agente nunca pode
-            </p>
-            {/*
-              Lista só de leitura de propósito: cada proibição é garantida por
-              construção no montador da resposta, não por um pedido ao modelo.
-              Editá-las numa caixa de texto daria a impressão de que mudar a
-              frase muda o comportamento — e não muda.
-            */}
-            <ul className="space-y-2 text-sm text-foreground">
-              {v.proibicoes.map((p) => (
-                <li key={p} className="flex items-start gap-2">
-                  <span
-                    aria-hidden
-                    className="mt-0.5 flex h-4 w-4 flex-none items-center justify-center rounded bg-primary text-primary-foreground"
-                  >
-                    <Check className="h-3 w-3" strokeWidth={3} />
-                  </span>
-                  {p}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <Campo rotulo="Rodapé obrigatório em toda resposta com valor" className="mt-4">
-            <FormTextarea
-              value={v.rodapeObrigatorio}
-              onChange={(valor) => mexer({ rodapeObrigatorio: valor })}
-              rows={3}
-            />
-          </Campo>
-        </Secao>
-
-        {/* ----------------------------------------------------------- limites */}
-        <Secao titulo="Limites e custo">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Campo rotulo="Perguntas por credor / dia">
-              <FormInput
-                type="number"
-                inputMode="numeric"
-                value={String(v.limitePerguntasCredorDia)}
-                onChange={(valor) => mexer({ limitePerguntasCredorDia: Number(valor) })}
-              />
-            </Campo>
-
-            <Campo rotulo="Alerta de custo mensal (R$)">
-              <FormInput
-                type="number"
-                inputMode="numeric"
-                value={String(v.alertaCustoMensalBrl)}
-                onChange={(valor) => mexer({ alertaCustoMensalBrl: Number(valor) })}
-              />
-            </Campo>
-          </div>
-
-          <div className="mt-4">
-            <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-xs">
-              <span className="font-medium text-foreground">Uso em {uso.mesReferencia}</span>
-              <span className="tabular-nums text-muted-foreground">
-                {formatBRL(uso.custoEstimadoBrl)} de {formatBRL(uso.alertaCustoMensalBrl)} ·{' '}
-                {uso.percentual}% · {uso.perguntas.toLocaleString('pt-BR')} perguntas
-              </span>
-            </div>
-            <div
-              className="h-2 w-full overflow-hidden rounded-full bg-muted"
-              role="progressbar"
-              aria-valuenow={uso.percentual}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label={`Custo do mês: ${uso.percentual}% do alerta`}
+      <div className="mx-auto w-full max-w-[1280px] space-y-6">
+        {/*
+          Duas pilhas a partir de `xl`, e não uma coluna única mais larga: o que
+          esta tela tem é formulário curto — dois selects, dois números, um
+          textarea — e esticar um select até a borda da tela só afasta o rótulo
+          do campo e alonga a leitura das listas. O espaço ganho vai para as
+          duas pilhas lado a lado (conexão e custo de um lado, política do
+          agente do outro) e para quem de fato precisa de largura: a tabela de
+          auditoria, que pede 52rem e por isso fica fora da grade, na faixa
+          inteira.
+        */}
+        <div className="grid gap-6 xl:grid-cols-2 xl:items-start">
+          {/* como o agente se conecta e quanto ele pode custar */}
+          <div className="space-y-6">
+            {/* ------------------------------------------------------ provedor */}
+            <Secao
+              titulo="Provedor de IA"
+              descricao="A chave nunca é exibida nem chega ao navegador do cliente."
             >
-              <div
-                className={`h-full rounded-full ${uso.percentual >= 100 ? 'bg-danger' : 'bg-primary'}`}
-                style={{ width: `${Math.min(uso.percentual, 100)}%` }}
-              />
-            </div>
-            {uso.custoEstimadoBrl === 0 && uso.perguntas > 0 && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                O custo aparece zerado porque o preço do token ainda não foi definido — as perguntas
-                acima foram registradas sem valor estimado.
-              </p>
-            )}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Campo rotulo="Provedor">
+                  <FormSelect value={v.provedor} onChange={(valor) => mexer({ provedor: valor })}>
+                    <option value="OPENAI">OpenAI</option>
+                  </FormSelect>
+                </Campo>
+
+                <Campo rotulo="Modelo">
+                  <FormInput value={v.modelo} onChange={(valor) => mexer({ modelo: valor })} />
+                </Campo>
+
+                <Campo rotulo="Chave de API" className="sm:col-span-2">
+                  {config.chaveConfigurada && !trocandoChave ? (
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <output className="flex-1 rounded-xl border border-input bg-background px-3 py-2.5 text-sm tabular-nums text-muted-foreground">
+                        {config.chaveMascarada ?? 'Chave gravada'}
+                      </output>
+                      <button
+                        type="button"
+                        onClick={() => setTrocandoChave(true)}
+                        className="h-11 rounded-xl border border-border px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+                      >
+                        Alterar chave
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <input
+                        type="password"
+                        value={apiKey}
+                        onChange={(e) => {
+                          setFeedback(null);
+                          setApiKey(e.target.value);
+                        }}
+                        autoComplete="off"
+                        spellCheck={false}
+                        placeholder="Cole a chave do provedor"
+                        aria-label="Nova chave de API"
+                        className="h-11 flex-1 rounded-xl border border-input bg-background px-3 text-sm outline-none transition-colors focus:border-primary focus:ring-4 focus:ring-primary/15"
+                      />
+                      {config.chaveConfigurada && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setApiKey('');
+                            setTrocandoChave(false);
+                          }}
+                          className="h-11 rounded-xl border border-border px-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                        >
+                          Cancelar
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <KeyRound className="h-3.5 w-3.5 shrink-0" />
+                    Guardada no Supabase Vault — nunca em texto plano.
+                    {config.chaveAtualizadaEm &&
+                      ` Atualizada em ${new Date(config.chaveAtualizadaEm).toLocaleString('pt-BR')}.`}
+                  </p>
+                </Campo>
+              </div>
+
+              <div className="mt-4 flex items-center justify-between gap-4 rounded-xl bg-muted/60 px-4 py-3">
+                <span className="text-sm font-medium text-foreground">
+                  Agente de relatórios ativo para todos os clientes
+                </span>
+                <Interruptor
+                  ligado={v.ativo}
+                  rotulo="Agente de relatórios ativo para todos os clientes"
+                  onChange={(ligado) => mexer({ ativo: ligado })}
+                />
+              </div>
+
+              {!config.chaveConfigurada && (
+                <p className="mt-3 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
+                  Sem chave gravada o agente responde 503 a qualquer pergunta, mesmo ligado.
+                </p>
+              )}
+            </Secao>
+
+            {/* ------------------------------------------------------- limites */}
+            <Secao titulo="Limites e custo">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Campo rotulo="Perguntas por credor / dia">
+                  <FormInput
+                    type="number"
+                    inputMode="numeric"
+                    value={String(v.limitePerguntasCredorDia)}
+                    onChange={(valor) => mexer({ limitePerguntasCredorDia: Number(valor) })}
+                  />
+                </Campo>
+
+                <Campo rotulo="Alerta de custo mensal (R$)">
+                  <FormInput
+                    type="number"
+                    inputMode="numeric"
+                    value={String(v.alertaCustoMensalBrl)}
+                    onChange={(valor) => mexer({ alertaCustoMensalBrl: Number(valor) })}
+                  />
+                </Campo>
+              </div>
+
+              <div className="mt-4">
+                <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <span className="font-medium text-foreground">Uso em {uso.mesReferencia}</span>
+                  <span className="tabular-nums text-muted-foreground">
+                    {formatBRL(uso.custoEstimadoBrl)} de {formatBRL(uso.alertaCustoMensalBrl)} ·{' '}
+                    {uso.percentual}% · {uso.perguntas.toLocaleString('pt-BR')} perguntas
+                  </span>
+                </div>
+                <div
+                  className="h-2 w-full overflow-hidden rounded-full bg-muted"
+                  role="progressbar"
+                  aria-valuenow={uso.percentual}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label={`Custo do mês: ${uso.percentual}% do alerta`}
+                >
+                  <div
+                    className={`h-full rounded-full ${uso.percentual >= 100 ? 'bg-danger' : 'bg-primary'}`}
+                    style={{ width: `${Math.min(uso.percentual, 100)}%` }}
+                  />
+                </div>
+                {uso.custoEstimadoBrl === 0 && uso.perguntas > 0 && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    O custo aparece zerado porque o preço do token ainda não foi definido — as
+                    perguntas acima foram registradas sem valor estimado.
+                  </p>
+                )}
+              </div>
+            </Secao>
           </div>
-        </Secao>
 
-        {/* ---------------------------------------------------------- catálogo */}
-        <Secao
-          titulo="Catálogo de dados permitido"
-          descricao="A IA nunca recebe acesso direto às tabelas nem escreve SQL livre. Ela só monta um plano de consulta dentro deste catálogo, e todo plano roda com o mesmo isolamento por credor (RLS) do dashboard."
-        >
-          <ul className="flex flex-wrap gap-2">
-            {catalogo.map((item) => {
-              if (!item.disponivel) {
-                return (
-                  <li key={item.id}>
-                    <span
-                      title={item.descricao}
-                      className="inline-flex cursor-default items-center rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground opacity-55"
-                    >
-                      {item.rotulo}
-                    </span>
-                  </li>
-                );
-              }
+          {/* o que ele pode dizer e quais dados enxerga */}
+          <div className="space-y-6">
+            {/* -------------------------------------------------------- regras */}
+            <Secao
+              titulo="Regras do agente"
+              descricao="Aplicadas a toda pergunta, de todo credor — campos estruturados, não um texto solto, para dar pra auditar o que foi autorizado."
+            >
+              {/* 3fr/2fr, não 50/50: o segmentado tem três rótulos para caber e o
+                  select de idioma tem um só. Meia linha sobraria para um e faltaria
+                  para o outro quando o card passa a ocupar meia coluna no `xl`. */}
+              <div className="grid gap-4 sm:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+                <Campo rotulo="Tom de voz">
+                  <Segmentado
+                    rotulo="Tom de voz"
+                    valor={v.tomDeVoz}
+                    opcoes={[
+                      { valor: 'FORMAL', rotulo: 'Formal' },
+                      { valor: 'CONSULTIVO', rotulo: 'Consultivo' },
+                      { valor: 'DIRETO', rotulo: 'Direto' },
+                    ]}
+                    onChange={(valor) => mexer({ tomDeVoz: valor })}
+                  />
+                </Campo>
 
-              const ligado = habilitados.includes(item.id as TipoRelatorio);
-              return (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={ligado}
-                    title={item.descricao}
-                    onClick={() => alternarRelatorio(item.id as TipoRelatorio)}
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                      ligado
-                        ? 'border-primary/40 bg-primary/10 text-primary'
-                        : 'border-border bg-card text-muted-foreground hover:border-primary/30'
-                    }`}
-                  >
-                    <span
-                      aria-hidden
-                      className={`h-1.5 w-1.5 rounded-full ${ligado ? 'bg-primary' : 'bg-muted-foreground/50'}`}
-                    />
-                    {item.rotulo}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-          <p className="mt-3 text-xs text-muted-foreground">
-            Desligar um relatório não apaga nada: o agente passa a recusar perguntas que caiam nele.
-          </p>
-        </Secao>
+                <Campo rotulo="Idioma de resposta">
+                  <FormSelect value={v.idioma} onChange={(valor) => mexer({ idioma: valor })}>
+                    <option value="pt-BR">Português (Brasil)</option>
+                  </FormSelect>
+                </Campo>
+              </div>
+
+              <div className="mt-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  O agente nunca pode
+                </p>
+                {/*
+                  Lista só de leitura de propósito: cada proibição é garantida por
+                  construção no montador da resposta, não por um pedido ao modelo.
+                  Editá-las numa caixa de texto daria a impressão de que mudar a
+                  frase muda o comportamento — e não muda.
+                */}
+                <ul className="space-y-2 text-sm text-foreground">
+                  {v.proibicoes.map((p) => (
+                    <li key={p} className="flex items-start gap-2">
+                      <span
+                        aria-hidden
+                        className="mt-0.5 flex h-4 w-4 flex-none items-center justify-center rounded bg-primary text-primary-foreground"
+                      >
+                        <Check className="h-3 w-3" strokeWidth={3} />
+                      </span>
+                      {p}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <Campo rotulo="Rodapé obrigatório em toda resposta com valor" className="mt-4">
+                <FormTextarea
+                  value={v.rodapeObrigatorio}
+                  onChange={(valor) => mexer({ rodapeObrigatorio: valor })}
+                  rows={3}
+                />
+              </Campo>
+            </Secao>
+
+            {/* ------------------------------------------------------ catálogo */}
+            <Secao
+              titulo="Catálogo de dados permitido"
+              descricao="A IA nunca recebe acesso direto às tabelas nem escreve SQL livre. Ela só monta um plano de consulta dentro deste catálogo, e todo plano roda com o mesmo isolamento por credor (RLS) do dashboard."
+            >
+              <ul className="flex flex-wrap gap-2">
+                {catalogo.map((item) => {
+                  if (!item.disponivel) {
+                    return (
+                      <li key={item.id}>
+                        <span
+                          title={item.descricao}
+                          className="inline-flex cursor-default items-center rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground opacity-55"
+                        >
+                          {item.rotulo}
+                        </span>
+                      </li>
+                    );
+                  }
+
+                  const ligado = habilitados.includes(item.id as TipoRelatorio);
+                  return (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={ligado}
+                        title={item.descricao}
+                        onClick={() => alternarRelatorio(item.id as TipoRelatorio)}
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                          ligado
+                            ? 'border-primary/40 bg-primary/10 text-primary'
+                            : 'border-border bg-card text-muted-foreground hover:border-primary/30'
+                        }`}
+                      >
+                        <span
+                          aria-hidden
+                          className={`h-1.5 w-1.5 rounded-full ${ligado ? 'bg-primary' : 'bg-muted-foreground/50'}`}
+                        />
+                        {item.rotulo}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Desligar um relatório não apaga nada: o agente passa a recusar perguntas que caiam
+                nele.
+              </p>
+            </Secao>
+          </div>
+        </div>
 
         <Auditoria />
       </div>
 
       {/* Barra de salvar — fica no fim do fluxo, não flutuando sobre o conteúdo. */}
-      <div className="mx-auto w-full max-w-[900px]">
+      <div className="mx-auto w-full max-w-[1280px]">
         <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card px-5 py-4 shadow-soft sm:flex-row sm:items-center sm:justify-between">
           {feedback ? (
             <div className="min-w-0 flex-1">

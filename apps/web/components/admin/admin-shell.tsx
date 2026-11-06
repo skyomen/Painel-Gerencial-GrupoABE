@@ -8,7 +8,6 @@ import {
   ChevronRight,
   LogOut,
   Menu,
-  Milestone,
   Settings,
   Shield,
   TrendingUp,
@@ -32,12 +31,6 @@ const NAV = [
     href: '/admin/configuracoes',
     icon: Settings,
     match: '/admin/configuracoes',
-  },
-  {
-    label: 'Cronograma',
-    href: '/admin/cronograma',
-    icon: Milestone,
-    match: '/admin/cronograma',
   },
 ];
 
@@ -97,14 +90,6 @@ function pageMeta(pathname: string): { title: string; subtitle: string; banner: 
       subtitle: 'Regra global — vale para todos os clientes do Grupo ABE',
       banner:
         'Configure o provedor de IA e as regras do agente de relatórios — vale para todos os clientes do Grupo ABE.',
-    };
-  }
-  if (pathname.startsWith('/admin/cronograma')) {
-    return {
-      title: 'Cronograma',
-      subtitle: 'Desenvolvimento do Painel Gerencial',
-      banner:
-        'O que está em execução, em fila e concluído no desenvolvimento deste sistema — histórico real a partir dos commits do repositório.',
     };
   }
   return {

@@ -42,3 +42,6 @@ crash.log
 
 # Arquivos temporários do Office
 ~$*
+
+# Material de apoio local (referências visuais, não é código nem documentação do projeto)
+_referencias/

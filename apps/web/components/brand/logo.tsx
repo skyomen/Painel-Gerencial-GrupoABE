@@ -1,8 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
-
-/** Logo oficial do Grupo ABE — `apps/web/public/brand/GRUPOABE.png` */
-export const LOGO_GRUPO_ABE = '/brand/GRUPOABE.png';
+import logoGrupoAbe from '@/public/brand/GRUPOABE.png';
 
 export function Logo({
   href = '/',
@@ -12,17 +10,15 @@ export function Logo({
 }: {
   href?: string | null;
   className?: string;
-  /** Altura em px (largura proporcional). */
+  /** Altura em px (largura proporcional, definida pelo arquivo). */
   height?: number;
   priority?: boolean;
 }) {
   const content = (
     <span className={`group inline-flex items-center ${className}`}>
       <Image
-        src={LOGO_GRUPO_ABE}
+        src={logoGrupoAbe}
         alt="Grupo ABE"
-        width={Math.round(height * 4.5)}
-        height={height}
         priority={priority}
         className="w-auto object-contain object-left transition-transform duration-500 ease-spring group-hover:scale-[1.03]"
         style={{ height: `${height}px`, width: 'auto', maxWidth: 'min(220px, 55vw)' }}

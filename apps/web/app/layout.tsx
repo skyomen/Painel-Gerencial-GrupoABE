@@ -21,6 +21,14 @@ export const metadata: Metadata = {
   title: 'Painel Gerencial Grupo ABE',
   description:
     'Portal único, seguro e multiempresa que consolida toda a régua de cobrança do Grupo ABE em uma só visão.',
+  icons: {
+    icon: [
+      { url: '/brand/favicon.ico', sizes: 'any' },
+      { url: '/brand/icon.png', type: 'image/png' },
+    ],
+    shortcut: '/brand/favicon.ico',
+    apple: '/brand/icon.png',
+  },
 };
 
 export const viewport: Viewport = {

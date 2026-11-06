@@ -84,7 +84,7 @@ export default function LoginPage() {
           <div className="relative z-10 flex flex-1 items-center justify-center px-6 py-12">
             <GlassLoginPanel>
               <div className="mb-6 flex justify-center">
-                <Logo href="/login" height={44} />
+                <Logo href="/login" height={180} />
               </div>
 
               <div className="mb-8 text-center">

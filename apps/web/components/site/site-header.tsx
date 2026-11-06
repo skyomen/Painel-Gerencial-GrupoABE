@@ -13,7 +13,7 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-50 border-b border-border/60 bg-background/70 backdrop-blur-xl">
       <div className="container flex h-16 items-center justify-between gap-4">
-        <Logo />
+        <Logo height={48} />
 
         <nav className="hidden items-center gap-1 md:flex">
           {NAV.map((item) => (

@@ -5,7 +5,7 @@ export function SiteFooter() {
   return (
     <footer className="border-t border-border/60 bg-surface/40">
       <div className="container flex flex-col items-center justify-between gap-6 py-10 sm:flex-row">
-        <Logo href={null} />
+        <Logo href={null} height={180} />
 
         <p className="text-center text-sm text-muted-foreground sm:text-right">
           © {new Date().getFullYear()} Grupo ABE. Acesso restrito, monitorado e auditado.

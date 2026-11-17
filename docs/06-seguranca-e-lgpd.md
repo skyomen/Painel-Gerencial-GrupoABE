@@ -35,6 +35,22 @@ CREATE POLICY credores_tenant_read ON public.credores
 
 Políticas para `SUPER_ADMIN` usam função `is_super_admin()` com `SECURITY DEFINER`.
 
+### Exceções ao modelo de tenant
+
+Três tabelas fogem do padrão "`tenant_id` + RLS por credor":
+
+| Tabela | Tenant? | Leitura | Escrita |
+|--------|---------|---------|---------|
+| `agente_relatorios_config` | Não | Só `SUPER_ADMIN` (policy `agente_relatorios_config_super_admin_all`) — sem `anon`/`authenticated` | Só `SUPER_ADMIN` / `service_role` |
+| `agente_relatorios_perguntas` | Sim (`tenant_id`) | Tenant-scoped (policy `agente_relatorios_perguntas_tenant_read`) + `SUPER_ADMIN` | Só `service_role`, dentro da rota, depois do guard de autenticação — sem `INSERT`/`UPDATE`/`DELETE` para `anon`/`authenticated` |
+| `cronograma_itens` | Não | Pública (policy `cronograma_itens_public_read`, `USING (true)`) — página `/cronograma` sem login | Pública, mas só via duas funções `SECURITY DEFINER` — sem `INSERT`/`UPDATE`/`DELETE` direto para `anon`/`authenticated` (DEC-0077) |
+
+- **`agente_relatorios_config`** — linha única de configuração do agente de relatórios com IA (provedor, modelo, tom de voz, proibições, cota diária e o ponteiro `api_key_secret_id` da chave no Supabase Vault). Nunca teve `tenant_id`: é política da casa, não do credor. A migration revoga explicitamente `anon` e `authenticated`, mesmo sem GRANT anterior sobre esta tabela.
+- **`agente_relatorios_perguntas`** — auditoria de toda pergunta feita ao agente (aprovada ou recusada). Leitura por tenant; a gravação é só pelo `service_role`, chamado pela rota `/api/relatorios/perguntar` depois de autenticar o usuário — nunca pelo navegador, para não permitir forjar o rastro de auditoria.
+- **`cronograma_itens`** — pública de propósito (DEC-0077): a página `/cronograma` não exige login, e o usuário decidiu que adicionar item à fila e reordená-la também ficam sem login nem senha, mesmo nível de acesso da leitura. A defesa não é esconder a ação, é estreitar o que ela pode fazer: ninguém escreve na tabela direto, nem `authenticated` — a única escrita pública passa por duas funções `SECURITY DEFINER` com validação estrita, `public.cronograma_adicionar_item_fila` (sempre insere com `status = 'FILA'`, sempre no fim da fila, nunca aceita `status` ou `id`) e `public.cronograma_reordenar_fila` (só aceita o conjunto exato de ids hoje em `FILA` — não remove item, não traz item de fora, não toca item fora da fila). Ambas revogam `PUBLIC`, `anon` e `authenticated` e depois concedem `EXECUTE` só a `anon`/`authenticated`, nunca ao `INSERT`/`UPDATE`/`DELETE` direto da tabela.
+
+As duas funções que tocam o Supabase Vault (`public.agente_relatorios_definir_chave`, `public.agente_relatorios_obter_chave`) seguem o mesmo padrão de fechamento: `SECURITY DEFINER` com `REVOKE ALL FROM PUBLIC, anon, authenticated` e `GRANT EXECUTE` só para `service_role` — a chave do provedor de IA nunca é alcançável por uma sessão `anon`/`authenticated`, nem por uma chamada de RPC do PostgREST.
+
 ## 6.3 Autenticação
 
 - **Provedor:** [Supabase Auth](https://supabase.com/docs/guides/auth) — decisão em [ADR-0003](adr/0003-identidade-autenticacao.md).

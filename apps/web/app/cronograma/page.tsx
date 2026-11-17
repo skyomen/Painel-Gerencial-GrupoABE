@@ -24,15 +24,7 @@
  * do hero escuro que o `AdminShell` desenhava via `pageMeta()`.
  */
 
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type FormEvent,
-  type KeyboardEvent,
-  type MutableRefObject,
-} from 'react';
+import { useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from 'react';
 import {
   CalendarDays,
   CheckCircle2,
@@ -50,6 +42,25 @@ import {
   RefreshCw,
   X,
 } from 'lucide-react';
+import {
+  closestCenter,
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Logo } from '@/components/brand/logo';
 import {
   type CronogramaItem,
@@ -250,11 +261,12 @@ export default function CronogramaPage() {
     setColunaColapsada((prev) => ({ ...prev, [statusId]: !prev[statusId] }));
   }
 
-  // ----- Arrastar para reordenar a fila (interação 4) -----
-  const draggedRef = useRef(false);
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
-  const [dragOverBefore, setDragOverBefore] = useState(true);
+  // ----- Arrastar para reordenar a fila (interação 4, via @dnd-kit) -----
+  const [itemArrastado, setItemArrastado] = useState<CronogramaItem | null>(null);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   async function patchFilaOrdem(ids: string[]) {
     try {
@@ -275,25 +287,40 @@ export default function CronogramaPage() {
     }
   }
 
-  function reordenarFila(movidoId: string, alvoId: string, antesDoAlvo: boolean) {
+  /** Aplica a nova ordem (lista de ids da fila, já na ordem visual final) ao estado local e persiste no servidor. */
+  function aplicarNovaOrdemFila(novaOrdemIds: string[]) {
     setItens((prev) => {
       if (!prev) return prev;
-      const fila = prev
-        .filter((i) => i.status === 'FILA')
-        .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
+      const porId = new Map(prev.filter((i) => i.status === 'FILA').map((i) => [i.id, i]));
       const outros = prev.filter((i) => i.status !== 'FILA');
-      const movido = fila.find((i) => i.id === movidoId);
-      if (!movido) return prev;
-
-      const semMovido = fila.filter((i) => i.id !== movidoId);
-      const alvoIdx = semMovido.findIndex((i) => i.id === alvoId);
-      if (alvoIdx === -1) semMovido.push(movido);
-      else semMovido.splice(antesDoAlvo ? alvoIdx : alvoIdx + 1, 0, movido);
-
-      const novaFila = semMovido.map((item, idx) => ({ ...item, ordem: idx + 1 }));
-      void patchFilaOrdem(novaFila.map((i) => i.id));
+      const novaFila = novaOrdemIds
+        .map((id) => porId.get(id))
+        .filter((i): i is CronogramaItem => Boolean(i))
+        .map((item, idx) => ({ ...item, ordem: idx + 1 }));
       return [...novaFila, ...outros];
     });
+    void patchFilaOrdem(novaOrdemIds);
+  }
+
+  function handleFilaDragStart(event: DragStartEvent) {
+    const item = ativos.find((i) => i.id === event.active.id);
+    setItemArrastado(item ?? null);
+  }
+
+  function handleFilaDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    setItemArrastado(null);
+    if (!over || active.id === over.id) return;
+
+    const filaIds = ativos
+      .filter((i) => i.status === 'FILA')
+      .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0))
+      .map((i) => i.id);
+    const oldIndex = filaIds.indexOf(String(active.id));
+    const newIndex = filaIds.indexOf(String(over.id));
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    aplicarNovaOrdemFila(arrayMove(filaIds, oldIndex, newIndex));
   }
 
   // ----- Modal "Adicionar à fila" (interação 3) -----
@@ -552,147 +579,132 @@ export default function CronogramaPage() {
               </div>
 
               {view === 'board' && (
-                <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
-                  {COLUNAS_QUADRO.map((statusId) => {
-                    const lista = ativos
-                      .filter((i) => i.status === statusId)
-                      .sort((a, b) => {
-                        if (statusId === 'FILA') return (a.ordem ?? 0) - (b.ordem ?? 0);
-                        return a.atualizadoEm < b.atualizadoEm ? 1 : -1;
-                      });
-                    const colapsada = colunaColapsada[statusId];
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragStart={handleFilaDragStart}
+                  onDragEnd={handleFilaDragEnd}
+                >
+                  <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    {COLUNAS_QUADRO.map((statusId) => {
+                      const lista = ativos
+                        .filter((i) => i.status === statusId)
+                        .sort((a, b) => {
+                          if (statusId === 'FILA') return (a.ordem ?? 0) - (b.ordem ?? 0);
+                          return a.atualizadoEm < b.atualizadoEm ? 1 : -1;
+                        });
+                      const colapsada = colunaColapsada[statusId];
 
-                    return (
-                      <div
-                        key={statusId}
-                        className="flex flex-col gap-2.5 rounded-2xl border border-border bg-muted/40 p-3"
-                      >
+                      return (
                         <div
-                          role="button"
-                          tabIndex={0}
-                          aria-expanded={!colapsada}
-                          onClick={() => alternarColuna(statusId)}
-                          onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              alternarColuna(statusId);
-                            }
-                          }}
-                          className="flex cursor-pointer select-none items-center justify-between gap-2 rounded-lg px-1 py-1 hover:bg-card/60"
+                          key={statusId}
+                          className="flex flex-col gap-2.5 rounded-2xl border border-border bg-muted/40 p-3"
                         >
-                          <div className="flex min-w-0 items-center gap-1.5">
-                            <ChevronDown
-                              className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ${
-                                colapsada ? '-rotate-90' : ''
-                              }`}
-                            />
-                            <h2 className="truncate text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                              {STATUS_INFO[statusId].rotulo}
-                            </h2>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-1.5">
-                            <span className="rounded-full border border-border bg-card px-2 py-0.5 text-[11px] font-bold tabular-nums text-muted-foreground">
-                              {lista.length}
-                            </span>
-                            {statusId === 'FILA' && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  abrirAddModal();
-                                }}
-                                aria-label="Adicionar item à fila"
-                                title="Adicionar item à fila"
-                                className="inline-flex h-[1.65rem] w-[1.65rem] items-center justify-center rounded-full bg-primary text-primary-foreground shadow-soft transition-transform hover:scale-105 hover:opacity-90"
-                              >
-                                <Plus className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        {!colapsada &&
-                          (lista.length === 0 ? (
-                            <div className="rounded-xl border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
-                              Nada aqui no momento.
-                            </div>
-                          ) : statusId === 'FILA' ? (
-                            lista.map((item) => (
-                              <FilaCard
-                                key={item.id}
-                                item={item}
-                                isDragging={draggingId === item.id}
-                                dragOverPosition={
-                                  dragOverId === item.id
-                                    ? dragOverBefore
-                                      ? 'before'
-                                      : 'after'
-                                    : null
-                                }
-                                draggedRef={draggedRef}
-                                onDragStartItem={() => setDraggingId(item.id)}
-                                onDragEndItem={() => {
-                                  setDraggingId(null);
-                                  setDragOverId(null);
-                                }}
-                                onDragOverItem={(antes) => {
-                                  setDragOverId(item.id);
-                                  setDragOverBefore(antes);
-                                }}
-                                onDragLeaveItem={() => {
-                                  setDragOverId((cur) => (cur === item.id ? null : cur));
-                                }}
-                                onDropItem={() => {
-                                  const movidoId = draggingId;
-                                  const antes = dragOverBefore;
-                                  setDragOverId(null);
-                                  if (movidoId && movidoId !== item.id) {
-                                    reordenarFila(movidoId, item.id, antes);
-                                  }
-                                }}
-                                isAnyDragging={draggingId !== null}
-                                onAbrir={() => setItemAberto(item)}
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            aria-expanded={!colapsada}
+                            onClick={() => alternarColuna(statusId)}
+                            onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                alternarColuna(statusId);
+                              }
+                            }}
+                            className="flex cursor-pointer select-none items-center justify-between gap-2 rounded-lg px-1 py-1 hover:bg-card/60"
+                          >
+                            <div className="flex min-w-0 items-center gap-1.5">
+                              <ChevronDown
+                                className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ${
+                                  colapsada ? '-rotate-90' : ''
+                                }`}
                               />
-                            ))
-                          ) : (
-                            lista.map((item) => (
-                              <button
-                                key={item.id}
-                                type="button"
-                                onClick={() => setItemAberto(item)}
-                                className="block w-full rounded-xl text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                              <h2 className="truncate text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                                {STATUS_INFO[statusId].rotulo}
+                              </h2>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-1.5">
+                              <span className="rounded-full border border-border bg-card px-2 py-0.5 text-[11px] font-bold tabular-nums text-muted-foreground">
+                                {lista.length}
+                              </span>
+                              {statusId === 'FILA' && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    abrirAddModal();
+                                  }}
+                                  aria-label="Adicionar item à fila"
+                                  title="Adicionar item à fila"
+                                  className="inline-flex h-[1.65rem] w-[1.65rem] items-center justify-center rounded-full bg-primary text-primary-foreground shadow-soft transition-transform hover:scale-105 hover:opacity-90"
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {!colapsada &&
+                            (lista.length === 0 ? (
+                              <div className="rounded-xl border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
+                                Nada aqui no momento.
+                              </div>
+                            ) : statusId === 'FILA' ? (
+                              <SortableContext
+                                items={lista.map((item) => item.id)}
+                                strategy={verticalListSortingStrategy}
                               >
-                                <div className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3.5 shadow-soft transition-colors hover:border-primary/40">
-                                  <div className="flex items-start gap-2">
-                                    <span
-                                      className={`mt-[6px] h-[7px] w-[7px] shrink-0 rounded-full ${STATUS_INFO[statusId].dot}`}
-                                      aria-hidden="true"
-                                    />
-                                    <p className="font-display text-[13.5px] font-semibold leading-snug text-foreground">
-                                      {item.titulo}
+                                {lista.map((item) => (
+                                  <FilaCard
+                                    key={item.id}
+                                    item={item}
+                                    onAbrir={() => setItemAberto(item)}
+                                  />
+                                ))}
+                              </SortableContext>
+                            ) : (
+                              lista.map((item) => (
+                                <button
+                                  key={item.id}
+                                  type="button"
+                                  onClick={() => setItemAberto(item)}
+                                  className="block w-full rounded-xl text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                                >
+                                  <div className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3.5 shadow-soft transition-colors hover:border-primary/40">
+                                    <div className="flex items-start gap-2">
+                                      <span
+                                        className={`mt-[6px] h-[7px] w-[7px] shrink-0 rounded-full ${STATUS_INFO[statusId].dot}`}
+                                        aria-hidden="true"
+                                      />
+                                      <p className="font-display text-[13.5px] font-semibold leading-snug text-foreground">
+                                        {item.titulo}
+                                      </p>
+                                    </div>
+                                    <p className="line-clamp-2 pl-[15px] text-[12.5px] leading-snug text-muted-foreground">
+                                      {item.descricao}
                                     </p>
+                                    <div className="flex items-center justify-between gap-2 pl-[15px] pt-1">
+                                      <span className="text-[11px] tabular-nums text-muted-foreground">
+                                        {item.atualizadoEm ? fmtData(item.atualizadoEm) : ''}
+                                      </span>
+                                      {item.evidenciaCommit ? (
+                                        <EvidenciaLink item={item} />
+                                      ) : item.prioridade != null ? (
+                                        <PrioridadeBadge n={item.prioridade} />
+                                      ) : null}
+                                    </div>
                                   </div>
-                                  <p className="line-clamp-2 pl-[15px] text-[12.5px] leading-snug text-muted-foreground">
-                                    {item.descricao}
-                                  </p>
-                                  <div className="flex items-center justify-between gap-2 pl-[15px] pt-1">
-                                    <span className="text-[11px] tabular-nums text-muted-foreground">
-                                      {item.atualizadoEm ? fmtData(item.atualizadoEm) : ''}
-                                    </span>
-                                    {item.evidenciaCommit ? (
-                                      <EvidenciaLink item={item} />
-                                    ) : item.prioridade != null ? (
-                                      <PrioridadeBadge n={item.prioridade} />
-                                    ) : null}
-                                  </div>
-                                </div>
-                              </button>
-                            ))
-                          ))}
-                      </div>
-                    );
-                  })}
-                </div>
+                                </button>
+                              ))
+                            ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <DragOverlay>
+                    {itemArrastado ? <FilaCardOverlay item={itemArrastado} /> : null}
+                  </DragOverlay>
+                </DndContext>
               )}
 
               {view === 'timeline' && (
@@ -1089,97 +1101,10 @@ function SortHeader({
   );
 }
 
-/**
- * Card da coluna FILA — arrastável (interação 4). O clique abre o modal de
- * escopo, mas só quando não houve um drag de verdade: `draggedRef` vira
- * `true` no dragstart e é consumido (resetado) no click, igual ao protótipo.
- */
-function FilaCard({
-  item,
-  isDragging,
-  isAnyDragging,
-  dragOverPosition,
-  draggedRef,
-  onDragStartItem,
-  onDragEndItem,
-  onDragOverItem,
-  onDragLeaveItem,
-  onDropItem,
-  onAbrir,
-}: {
-  item: CronogramaItem;
-  isDragging: boolean;
-  isAnyDragging: boolean;
-  dragOverPosition: 'before' | 'after' | null;
-  draggedRef: MutableRefObject<boolean>;
-  onDragStartItem: () => void;
-  onDragEndItem: () => void;
-  onDragOverItem: (antesDoAlvo: boolean) => void;
-  onDragLeaveItem: () => void;
-  onDropItem: () => void;
-  onAbrir: () => void;
-}) {
-  // Feedback imediato ao pressionar o mouse — antes mesmo do dragstart nativo
-  // disparar (ou mesmo que não chegue a disparar, num clique normal).
-  const [pressionando, setPressionando] = useState(false);
-
+/** Conteúdo visual do card da fila — compartilhado entre o card arrastável (`FilaCard`) e a cópia flutuante do `DragOverlay` (`FilaCardOverlay`). */
+function FilaCardConteudo({ item }: { item: CronogramaItem }) {
   return (
-    <div
-      draggable
-      role="button"
-      tabIndex={0}
-      data-id={item.id}
-      onMouseDown={() => setPressionando(true)}
-      onMouseUp={() => setPressionando(false)}
-      onDragStart={(e) => {
-        draggedRef.current = true;
-        setPressionando(false);
-        try {
-          e.dataTransfer.setData('text/plain', item.id);
-        } catch {
-          // alguns navegadores restringem setData fora de certos contextos — ok ignorar
-        }
-        e.dataTransfer.effectAllowed = 'move';
-        onDragStartItem();
-      }}
-      onDragEnd={() => {
-        setPressionando(false);
-        onDragEndItem();
-      }}
-      onDragOver={(e) => {
-        if (!isAnyDragging || isDragging) return;
-        e.preventDefault();
-        const rect = e.currentTarget.getBoundingClientRect();
-        onDragOverItem(e.clientY - rect.top < rect.height / 2);
-      }}
-      onDragLeave={onDragLeaveItem}
-      onDrop={(e) => {
-        e.preventDefault();
-        onDropItem();
-      }}
-      onClick={() => {
-        if (draggedRef.current) {
-          draggedRef.current = false;
-          return;
-        }
-        onAbrir();
-      }}
-      onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onAbrir();
-        }
-      }}
-      className={`relative flex cursor-pointer flex-col gap-2 rounded-xl border border-border bg-card p-3.5 shadow-soft transition-[transform,box-shadow,border-color,opacity] duration-150 ease-spring hover:border-primary/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
-        isDragging
-          ? 'cursor-grabbing opacity-60 shadow-card outline outline-2 outline-dashed outline-primary/50 motion-safe:scale-[1.03] motion-safe:-rotate-1'
-          : pressionando
-            ? 'shadow-card motion-safe:scale-[1.015]'
-            : ''
-      } ${dragOverPosition === 'before' ? 'shadow-[inset_0_2px_0_0_hsl(var(--primary))]' : ''} ${
-        dragOverPosition === 'after' ? 'shadow-[inset_0_-2px_0_0_hsl(var(--primary))]' : ''
-      }`}
-    >
+    <>
       <div className="flex items-start gap-2">
         <span
           className={`mt-[6px] h-[7px] w-[7px] shrink-0 rounded-full ${STATUS_INFO.FILA.dot}`}
@@ -1198,6 +1123,60 @@ function FilaCard({
         </span>
         {item.prioridadeDesejada && <PrioridadeDesejadaBadge valor={item.prioridadeDesejada} />}
       </div>
+    </>
+  );
+}
+
+/**
+ * Card da coluna FILA — arrastável via `@dnd-kit/sortable` (interação 4). O
+ * card inteiro é o "handle" de arraste (`attributes`/`listeners` do
+ * `useSortable`) e também o clique que abre o modal de escopo: o
+ * `activationConstraint` de distância no sensor do `DndContext` garante que
+ * um clique sem movimento não vira drag, então `onClick` não precisa de
+ * nenhuma lógica extra de "foi drag ou não".
+ */
+function FilaCard({ item, onAbrir }: { item: CronogramaItem; onAbrir: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: item.id,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      role="button"
+      tabIndex={0}
+      data-id={item.id}
+      onClick={onAbrir}
+      onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onAbrir();
+        }
+      }}
+      className={`relative flex cursor-pointer flex-col gap-2 rounded-xl border border-border bg-card p-3.5 shadow-soft transition-[transform,box-shadow,border-color,opacity] duration-150 ease-spring hover:border-primary/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
+        isDragging
+          ? 'cursor-grabbing opacity-60 shadow-card outline outline-2 outline-dashed outline-primary/50 motion-safe:scale-[1.03] motion-safe:-rotate-1'
+          : ''
+      }`}
+    >
+      <FilaCardConteudo item={item} />
+    </div>
+  );
+}
+
+/** Cópia flutuante renderizada pelo `DragOverlay` — mesmo JSX visual do card, sem handlers de drag. */
+function FilaCardOverlay({ item }: { item: CronogramaItem }) {
+  return (
+    <div className="flex cursor-grabbing flex-col gap-2 rounded-xl border border-primary/40 bg-card p-3.5 shadow-card motion-safe:scale-[1.03] motion-safe:-rotate-1">
+      <FilaCardConteudo item={item} />
     </div>
   );
 }

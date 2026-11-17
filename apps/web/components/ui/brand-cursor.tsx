@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { BrandLogoStack } from '@/components/ui/brand-logo-stack';
-import { BRAND_CURSOR_IDLE_MS, BRAND_LOGO_CYCLE_MS, BRAND_MOUSE_LOGOS } from '@/lib/brand-logos';
+import { BRAND_LOGO_CYCLE_MS, BRAND_MOUSE_LOGOS } from '@/lib/brand-logos';
+import { useIsLoading } from '@/lib/loading-tracker';
 
 /** Área de posicionamento do ponteiro (centro do mouse) */
 const CURSOR_SIZE = 30;
@@ -11,69 +12,44 @@ function setNativeCursorHidden(hidden: boolean) {
   document.documentElement.classList.toggle('brand-custom-cursor', hidden);
 }
 
-/** Logos no ponteiro — só após 1s parado; ao mover, volta o cursor do sistema. */
+/**
+ * Logos no ponteiro — ativo somente enquanto há carregamento real em curso
+ * (uma requisição `fetch` em voo, via `useIsLoading`). Ao terminar, o cursor
+ * nativo volta na hora.
+ */
 export function BrandCursor() {
-  const [idleActive, setIdleActive] = useState(false);
+  const carregando = useIsLoading();
+  const [ativo, setAtivo] = useState(false);
   const [logoIndex, setLogoIndex] = useState(0);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const posRef = useRef({ x: -100, y: -100 });
-  const lastMoveRef = useRef(performance.now());
   const lastCycleRef = useRef(0);
-  const idleActiveRef = useRef(false);
-  const inViewportRef = useRef(false);
+  const ativoRef = useRef(false);
   const rafRef = useRef<number>(0);
+  const enabledRef = useRef(true);
 
+  // Posiciona o overlay junto do cursor — necessário mesmo fora do
+  // carregamento, pra já saber onde desenhar assim que `ativo` vira true.
   useEffect(() => {
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
-    if (reducedMotion || coarsePointer) return;
-
-    const deactivateIdle = () => {
-      if (!idleActiveRef.current) return;
-      idleActiveRef.current = false;
-      setIdleActive(false);
-      setNativeCursorHidden(false);
-    };
+    enabledRef.current = !reducedMotion && !coarsePointer;
+    if (!enabledRef.current) return;
 
     const onMove = (event: MouseEvent) => {
       posRef.current = { x: event.clientX, y: event.clientY };
-      lastMoveRef.current = performance.now();
-      inViewportRef.current = true;
-      deactivateIdle();
     };
-
-    const onLeave = () => {
-      inViewportRef.current = false;
-      deactivateIdle();
-    };
-
-    const onEnter = () => {
-      inViewportRef.current = true;
-    };
-
     window.addEventListener('mousemove', onMove, { passive: true });
-    document.documentElement.addEventListener('mouseleave', onLeave);
-    document.documentElement.addEventListener('mouseenter', onEnter);
 
     const tick = (now: number) => {
-      const stoppedFor = now - lastMoveRef.current;
-      const isIdle = stoppedFor >= BRAND_CURSOR_IDLE_MS;
-
-      if (isIdle && !idleActiveRef.current && inViewportRef.current) {
-        idleActiveRef.current = true;
-        lastCycleRef.current = now;
-        setIdleActive(true);
-        setNativeCursorHidden(true);
-      }
-
-      if (idleActiveRef.current && now - lastCycleRef.current >= BRAND_LOGO_CYCLE_MS) {
+      if (ativoRef.current && now - lastCycleRef.current >= BRAND_LOGO_CYCLE_MS) {
         lastCycleRef.current = now;
         setLogoIndex((i) => (i + 1) % BRAND_MOUSE_LOGOS.length);
       }
 
       const el = rootRef.current;
-      if (el && idleActiveRef.current) {
+      if (el && ativoRef.current) {
         const x = posRef.current.x - CURSOR_SIZE / 2;
         const y = posRef.current.y - CURSOR_SIZE / 2;
         el.style.transform = `translate3d(${x}px, ${y}px, 0)`;
@@ -87,13 +63,20 @@ export function BrandCursor() {
     return () => {
       setNativeCursorHidden(false);
       window.removeEventListener('mousemove', onMove);
-      document.documentElement.removeEventListener('mouseleave', onLeave);
-      document.documentElement.removeEventListener('mouseenter', onEnter);
       cancelAnimationFrame(rafRef.current);
     };
   }, []);
 
-  if (!idleActive) return null;
+  // Único gatilho de ativação/desativação: carregamento real em voo.
+  useEffect(() => {
+    if (!enabledRef.current) return;
+    ativoRef.current = carregando;
+    setAtivo(carregando);
+    setNativeCursorHidden(carregando);
+    if (carregando) lastCycleRef.current = performance.now();
+  }, [carregando]);
+
+  if (!ativo) return null;
 
   return (
     <div

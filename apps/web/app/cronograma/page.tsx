@@ -603,7 +603,7 @@ export default function CronogramaPage() {
                                 }}
                                 aria-label="Adicionar item à fila"
                                 title="Adicionar item à fila"
-                                className="inline-flex h-[1.4rem] w-[1.4rem] items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/10 hover:text-primary"
+                                className="inline-flex h-[1.65rem] w-[1.65rem] items-center justify-center rounded-full bg-primary text-primary-foreground shadow-soft transition-transform hover:scale-105 hover:opacity-90"
                               >
                                 <Plus className="h-3.5 w-3.5" />
                               </button>
@@ -1119,14 +1119,21 @@ function FilaCard({
   onDropItem: () => void;
   onAbrir: () => void;
 }) {
+  // Feedback imediato ao pressionar o mouse — antes mesmo do dragstart nativo
+  // disparar (ou mesmo que não chegue a disparar, num clique normal).
+  const [pressionando, setPressionando] = useState(false);
+
   return (
     <div
       draggable
       role="button"
       tabIndex={0}
       data-id={item.id}
+      onMouseDown={() => setPressionando(true)}
+      onMouseUp={() => setPressionando(false)}
       onDragStart={(e) => {
         draggedRef.current = true;
+        setPressionando(false);
         try {
           e.dataTransfer.setData('text/plain', item.id);
         } catch {
@@ -1135,7 +1142,10 @@ function FilaCard({
         e.dataTransfer.effectAllowed = 'move';
         onDragStartItem();
       }}
-      onDragEnd={onDragEndItem}
+      onDragEnd={() => {
+        setPressionando(false);
+        onDragEndItem();
+      }}
       onDragOver={(e) => {
         if (!isAnyDragging || isDragging) return;
         e.preventDefault();
@@ -1160,10 +1170,12 @@ function FilaCard({
           onAbrir();
         }
       }}
-      className={`relative flex cursor-pointer flex-col gap-2 rounded-xl border border-border bg-card p-3.5 shadow-soft transition-[transform,box-shadow,border-color,opacity] duration-200 hover:border-primary/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
+      className={`relative flex cursor-pointer flex-col gap-2 rounded-xl border border-border bg-card p-3.5 shadow-soft transition-[transform,box-shadow,border-color,opacity] duration-150 ease-spring hover:border-primary/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
         isDragging
-          ? 'cursor-grabbing opacity-40 outline outline-2 outline-dashed outline-primary/50'
-          : ''
+          ? 'cursor-grabbing opacity-60 shadow-card outline outline-2 outline-dashed outline-primary/50 motion-safe:scale-[1.03] motion-safe:-rotate-1'
+          : pressionando
+            ? 'shadow-card motion-safe:scale-[1.015]'
+            : ''
       } ${dragOverPosition === 'before' ? 'shadow-[inset_0_2px_0_0_hsl(var(--primary))]' : ''} ${
         dragOverPosition === 'after' ? 'shadow-[inset_0_-2px_0_0_hsl(var(--primary))]' : ''
       }`}

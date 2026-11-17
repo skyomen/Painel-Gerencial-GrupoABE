@@ -1,6 +1,6 @@
 # ADR-0004 — Estratégia multi-tenant e isolamento
 
-Status: Proposto
+Status: Aceito
 Data: 2026-06-18
 
 ## Contexto

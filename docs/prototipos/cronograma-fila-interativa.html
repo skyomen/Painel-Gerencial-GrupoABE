@@ -1,0 +1,731 @@
+<!--
+  Protótipo de 5 interações novas na visão Quadro do Cronograma — PENDENTE DE
+  APROVAÇÃO. Dado 100% sintético (fictício, não é o cronograma real).
+
+  Segue a mesma convenção de docs/prototipos/cronograma-redesign.html (já
+  aprovado): Tailwind CDN sem config, classes hand-rolled casadas com os
+  tokens HSL reais (globals.css / tailwind.config.ts), ícones Lucide como SVG
+  inline, JS vanilla sem dependência externa. Foco é só a visão Quadro —
+  Linha do tempo/Lista e a Visão geral aparecem apenas como contexto visual
+  estático/decorativo (não funcionais neste protótipo).
+
+  As 5 interações:
+  1. Botão "Atualizar" (simula fetch de ~600ms) + "Última atualização: HH:mm:ss".
+  2. Rótulo "Em execução" → "Em desenvolvimento" (só texto visível).
+  3. "+" no cabeçalho da coluna FILA → modal (mesmo estilo do modal de escopo)
+     → novo card sempre no FIM da fila, independente da prioridade informada.
+  4. Arrastar para reordenar dentro da coluna FILA (HTML5 draggable nativo).
+  5. Colapsar/expandir cada coluna, independente, clicando no cabeçalho.
+
+  Divergência da implementação em relação a este arquivo é defeito, não gosto
+  pessoal de quem implementa.
+-->
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]{display:none!important}</style></head><body>
+<title>Cronograma — fila interativa (protótipo)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root{
+    color-scheme: light;
+    --background:216 33% 97%; --foreground:221 45% 15%;
+    --surface:218 28% 95%; --card:0 0% 100%; --card-foreground:221 45% 15%;
+    --muted:218 24% 93%; --muted-foreground:224 14% 42%;
+    --border:218 22% 88%; --input:218 22% 85%; --ring:220 65% 38%;
+    --primary:220 71% 30%; --primary-foreground:0 0% 100%; --primary-deep:221 46% 22%;
+    --accent:41 50% 47%; --accent-foreground:221 46% 16%; --gold-soft:38 50% 64%;
+    --success:162 36% 36%; --warning:38 54% 46%; --danger:0 56% 48%;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      color-scheme: dark;
+      --background:222 44% 8%; --foreground:216 28% 90%;
+      --surface:221 40% 11%; --card:221 38% 12%; --card-foreground:216 28% 90%;
+      --muted:221 28% 18%; --muted-foreground:220 15% 62%;
+      --border:221 26% 22%; --input:221 26% 24%; --ring:217 60% 60%;
+      --primary:217 62% 60%; --primary-foreground:222 44% 10%; --primary-deep:221 45% 18%;
+      --accent:41 52% 58%; --accent-foreground:222 44% 10%; --gold-soft:38 50% 66%;
+      --success:162 40% 48%; --warning:41 54% 58%; --danger:0 60% 64%;
+    }
+  }
+
+  *{box-sizing:border-box}
+  body{
+    background:hsl(var(--background)); color:hsl(var(--foreground));
+    font-family:'Inter',system-ui,sans-serif; -webkit-font-smoothing:antialiased;
+  }
+  .font-display{font-family:'Sora','Inter',system-ui,sans-serif}
+  .tabular{font-variant-numeric:tabular-nums}
+  button{font:inherit}
+  button:focus-visible, a:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible{outline:2px solid hsl(var(--primary));outline-offset:2px}
+
+  .bg-background{background:hsl(var(--background))}
+  .bg-card{background:hsl(var(--card))}
+  .bg-surface{background:hsl(var(--surface))}
+  .bg-muted{background:hsl(var(--muted))}
+  .bg-muted\/70{background:hsl(var(--muted) / .7)}
+  .bg-muted\/60{background:hsl(var(--muted) / .6)}
+  .bg-muted\/50{background:hsl(var(--muted) / .5)}
+  .bg-muted\/40{background:hsl(var(--muted) / .4)}
+  .text-foreground{color:hsl(var(--foreground))}
+  .text-card-foreground{color:hsl(var(--card-foreground))}
+  .text-muted-foreground{color:hsl(var(--muted-foreground))}
+  .border-border{border-color:hsl(var(--border))}
+  .border-input{border-color:hsl(var(--input))}
+
+  .bg-primary{background:hsl(var(--primary))}
+  .text-primary{color:hsl(var(--primary))}
+  .text-primary-foreground{color:hsl(var(--primary-foreground))}
+  .bg-primary\/5{background:hsl(var(--primary) / .05)}
+  .bg-primary\/10{background:hsl(var(--primary) / .1)}
+  .bg-primary\/15{background:hsl(var(--primary) / .15)}
+  .border-primary\/15{border-color:hsl(var(--primary) / .15)}
+  .border-primary\/20{border-color:hsl(var(--primary) / .2)}
+  .border-primary\/30{border-color:hsl(var(--primary) / .3)}
+  .border-primary\/40{border-color:hsl(var(--primary) / .4)}
+  .bg-brand{background-image:linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-deep)))}
+
+  .bg-accent{background:hsl(var(--accent))}
+  .text-accent{color:hsl(var(--accent))}
+  .bg-accent\/10{background:hsl(var(--accent) / .1)}
+  .bg-accent\/12{background:hsl(var(--accent) / .12)}
+  .border-accent\/30{border-color:hsl(var(--accent) / .3)}
+
+  .text-success{color:hsl(var(--success))}
+  .bg-success\/10{background:hsl(var(--success) / .1)}
+  .border-success\/30{border-color:hsl(var(--success) / .3)}
+  .text-warning{color:hsl(var(--warning))}
+  .bg-warning\/10{background:hsl(var(--warning) / .1)}
+  .text-danger{color:hsl(var(--danger))}
+  .bg-danger\/10{background:hsl(var(--danger) / .1)}
+  .border-danger\/30{border-color:hsl(var(--danger) / .3)}
+
+  .shadow-soft{box-shadow:0 1px 2px 0 hsl(220 43% 11% / .04), 0 4px 16px -2px hsl(220 43% 11% / .06)}
+  .shadow-card{box-shadow:0 2px 4px hsl(220 43% 11% / .04), 0 12px 32px -8px hsl(220 43% 11% / .10)}
+  .bg-grid-light{background-image:linear-gradient(to right, hsl(220 20% 50% / .07) 1px, transparent 1px),linear-gradient(to bottom, hsl(220 20% 50% / .07) 1px, transparent 1px)}
+
+  .lift{transition:transform .35s cubic-bezier(.22,1,.36,1), box-shadow .35s cubic-bezier(.22,1,.36,1), border-color .2s ease}
+  .lift:hover{transform:translateY(-3px)}
+
+  .icon{width:1.1rem;height:1.1rem;flex:none}
+  .icon-sm{width:.95rem;height:.95rem;flex:none}
+  .icon-lg{width:1.5rem;height:1.5rem;flex:none}
+  svg.icon, svg.icon-sm, svg.icon-lg{stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+  .line-clamp-2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+  .seg{display:inline-flex;border:1px solid hsl(var(--border));border-radius:.8rem;padding:.2rem;background:hsl(var(--muted) / .5);gap:.15rem}
+  .seg button{display:inline-flex;align-items:center;gap:.4rem;border-radius:.55rem;padding:.45rem .85rem;font-size:.78rem;font-weight:600;color:hsl(var(--muted-foreground));background:transparent;border:none;cursor:pointer;white-space:nowrap}
+  .seg button:hover:not(.active){color:hsl(var(--foreground))}
+  .seg button.active{background:hsl(var(--card));color:hsl(var(--primary));box-shadow:0 1px 2px hsl(220 43% 11% / .08)}
+
+  .progress-track{background:hsl(0 0% 100% / .14)}
+  .progress-fill{
+    background-image:linear-gradient(90deg, hsl(var(--accent)), hsl(var(--gold-soft)));
+    box-shadow:0 0 18px hsl(var(--accent) / .55);
+  }
+
+  @keyframes fade-in-up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+  .enter{animation:fade-in-up .5s cubic-bezier(.22,1,.36,1) both}
+
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .spin{animation:spin .7s linear infinite}
+
+  .item-btn{all:unset;cursor:pointer;display:block;width:100%;box-sizing:border-box;border-radius:1rem}
+  .item-btn:focus-visible{outline:2px solid hsl(var(--primary));outline-offset:2px;border-radius:1rem}
+
+  /* ---- Interação 1: botão Atualizar ---- */
+  .btn-atualizar{display:inline-flex;align-items:center;gap:.4rem;border-radius:.65rem;border:1px solid hsl(var(--border));background:hsl(var(--card));padding:.4rem .75rem;font-size:.75rem;font-weight:600;color:hsl(var(--foreground));cursor:pointer;transition:border-color .2s ease,color .2s ease}
+  .btn-atualizar:hover:not(:disabled){border-color:hsl(var(--primary) / .4);color:hsl(var(--primary))}
+  .btn-atualizar:disabled{cursor:default;opacity:.75}
+
+  /* ---- Cabeçalho de coluna clicável (interação 5) ---- */
+  .col-header{display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.35rem .25rem .35rem .4rem;border-radius:.6rem;cursor:pointer;user-select:none}
+  .col-header:hover{background:hsl(var(--card) / .6)}
+  .col-header-left{display:flex;align-items:center;gap:.35rem;min-width:0}
+  .col-chevron{transition:transform .25s cubic-bezier(.22,1,.36,1);color:hsl(var(--muted-foreground))}
+  .col-chevron.collapsed{transform:rotate(-90deg)}
+
+  /* ---- Botão "+" da coluna FILA (interação 3) ---- */
+  .btn-add-col{display:inline-flex;align-items:center;justify-content:center;height:1.4rem;width:1.4rem;border-radius:9999px;border:1px solid hsl(var(--border));background:hsl(var(--card));color:hsl(var(--muted-foreground));cursor:pointer;transition:border-color .2s ease,color .2s ease,background .2s ease}
+  .btn-add-col:hover{border-color:hsl(var(--primary) / .5);color:hsl(var(--primary));background:hsl(var(--primary) / .08)}
+
+  /* ---- Drag and drop dentro da coluna FILA (interação 4) ---- */
+  .fila-card{position:relative}
+  .fila-card .drag-handle{opacity:0;transition:opacity .15s ease;color:hsl(var(--muted-foreground));cursor:grab}
+  .fila-card:hover .drag-handle{opacity:1}
+  .fila-card.dragging{opacity:.4;outline:2px dashed hsl(var(--primary) / .5);outline-offset:2px}
+  .fila-card.drag-over-top{box-shadow:inset 0 2px 0 0 hsl(var(--primary))}
+  .fila-card.drag-over-bottom{box-shadow:inset 0 -2px 0 0 hsl(var(--primary))}
+
+  /* ---- Modal "+ item na fila" (mesmo estilo do modal de escopo) ---- */
+  .field-label{display:block;margin-bottom:.35rem;font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.03em;color:hsl(var(--muted-foreground))}
+  .field-input,.field-textarea,.field-select{width:100%;border-radius:.65rem;border:1px solid hsl(var(--input));background:hsl(var(--card));padding:.55rem .7rem;font-size:.85rem;color:hsl(var(--foreground))}
+  .field-input:focus,.field-textarea:focus,.field-select:focus{border-color:hsl(var(--primary) / .6)}
+  .field-textarea{resize:vertical;min-height:4.5rem;font-family:inherit}
+
+  ::placeholder{color:hsl(var(--muted-foreground))}
+</style>
+
+<div class="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10">
+
+  <div class="inline-flex w-fit items-center gap-2 self-start rounded-full border border-border bg-muted/60 px-3 py-1 text-[11px] font-medium text-muted-foreground">
+    <svg class="icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+    Protótipo de interação — só a visão Quadro é funcional, dado 100% fictício
+  </div>
+
+  <header class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div class="flex items-center gap-3.5">
+      <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand font-display text-xs font-bold text-primary-foreground shadow-soft" style="box-shadow:0 0 0 1px hsl(var(--accent) / .35)">ABE</div>
+      <div>
+        <h1 class="font-display text-xl font-bold text-foreground sm:text-2xl">Cronograma de desenvolvimento</h1>
+        <p class="mt-1 max-w-xl text-sm text-muted-foreground">Página pública, sem login. Este protótipo testa 5 interações novas na visão Quadro antes de virar código real.</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== Visão geral (decorativa, não reage às interações deste protótipo) ===== -->
+  <section class="bg-brand relative overflow-hidden rounded-3xl p-6 shadow-card sm:p-8" style="border:1px solid hsl(var(--primary-deep) / .5)">
+    <div class="bg-grid-light pointer-events-none absolute inset-0 opacity-20" style="background-size:34px 34px"></div>
+    <div class="pointer-events-none absolute -right-14 -top-16 h-56 w-56 rounded-full bg-accent/40" style="filter:blur(70px)"></div>
+
+    <div class="relative flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+      <div class="max-w-sm">
+        <p class="text-xs font-semibold uppercase tracking-wider" style="color:hsl(0 0% 100% / .62)">Progresso geral</p>
+        <p class="mt-2 font-display text-5xl font-extrabold tabular text-primary-foreground">36%</p>
+        <p class="mt-2 text-sm" style="color:hsl(0 0% 100% / .78)">4 de 11 itens concluídos</p>
+        <div class="mt-5 h-2.5 w-full overflow-hidden rounded-full progress-track">
+          <div class="h-full rounded-full progress-fill" style="width:36%"></div>
+        </div>
+        <p class="mt-3 text-xs" style="color:hsl(0 0% 100% / .5)">Seção decorativa — não é afetada pelas interações deste protótipo.</p>
+      </div>
+
+      <div class="grid grid-cols-3 gap-3 sm:gap-4">
+        <div class="flex flex-col items-start gap-2 rounded-2xl border p-3.5 sm:p-4" style="background:hsl(0 0% 100% / .08);border-color:hsl(0 0% 100% / .14)">
+          <svg class="icon" viewBox="0 0 24 24" style="color:hsl(152 65% 68%)"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></svg>
+          <p class="font-display text-xl font-bold tabular text-primary-foreground sm:text-2xl">4</p>
+          <p class="text-[10.5px] font-medium uppercase tracking-wide" style="color:hsl(0 0% 100% / .65)">Concluído</p>
+        </div>
+        <div class="flex flex-col items-start gap-2 rounded-2xl border p-3.5 sm:p-4" style="background:hsl(0 0% 100% / .08);border-color:hsl(0 0% 100% / .14)">
+          <svg class="icon" viewBox="0 0 24 24" style="color:hsl(var(--gold-soft))"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>
+          <p class="font-display text-xl font-bold tabular text-primary-foreground sm:text-2xl">3</p>
+          <p class="text-[10.5px] font-medium uppercase tracking-wide" style="color:hsl(0 0% 100% / .65)" id="stat-em-dev-label">Em desenvolvimento</p>
+        </div>
+        <div class="flex flex-col items-start gap-2 rounded-2xl border p-3.5 sm:p-4" style="background:hsl(0 0% 100% / .08);border-color:hsl(0 0% 100% / .14)">
+          <svg class="icon" viewBox="0 0 24 24" style="color:hsl(0 0% 100% / .7)"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <p class="font-display text-xl font-bold tabular text-primary-foreground sm:text-2xl" id="stat-fila-n">4</p>
+          <p class="text-[10.5px] font-medium uppercase tracking-wide" style="color:hsl(0 0% 100% / .65)">Na fila</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Painel principal ===== -->
+  <section class="rounded-3xl border border-border bg-card p-5 shadow-soft sm:p-6">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div class="seg" id="view-tabs" role="tablist" aria-label="Tipo de visualização">
+        <button type="button" class="active" data-view="board" aria-pressed="true">
+          <svg class="icon-sm" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+          Quadro
+        </button>
+        <button type="button" data-view="timeline" aria-pressed="false">
+          <svg class="icon-sm" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+          Linha do tempo
+        </button>
+        <button type="button" data-view="table" aria-pressed="false">
+          <svg class="icon-sm" viewBox="0 0 24 24"><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/></svg>
+          Lista
+        </button>
+      </div>
+
+      <!-- Interação 1: Atualizar + "Última atualização" -->
+      <div class="flex flex-col items-start gap-1 sm:items-end">
+        <div class="flex items-center gap-2.5">
+          <span class="text-xs text-muted-foreground" id="board-resumo"></span>
+          <button type="button" class="btn-atualizar" id="btn-atualizar">
+            <svg class="icon-sm" viewBox="0 0 24 24" id="icon-atualizar"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+            <span id="label-atualizar">Atualizar</span>
+          </button>
+        </div>
+        <span class="text-[11px] tabular text-muted-foreground/80" id="ultima-atualizacao">Última atualização: —</span>
+      </div>
+    </div>
+
+    <div class="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3" id="board"></div>
+
+    <div class="mt-5 rounded-xl border border-dashed border-border p-6 text-center text-xs text-muted-foreground" id="timeline-placeholder" hidden>
+      Linha do tempo — ilustrativa neste protótipo, não funcional. O foco das 5 interações é a visão Quadro.
+    </div>
+    <div class="mt-5 rounded-xl border border-dashed border-border p-6 text-center text-xs text-muted-foreground" id="table-placeholder" hidden>
+      Lista — ilustrativa neste protótipo, não funcional. O foco das 5 interações é a visão Quadro.
+    </div>
+  </section>
+
+  <footer class="pb-2 text-center text-[11px] text-muted-foreground/70">
+    Protótipo estático de interação — <code class="rounded bg-muted px-1.5 py-0.5">docs/prototipos/cronograma-fila-interativa.html</code>. Dado sintético. Após aprovação, vira código em <code class="rounded bg-muted px-1.5 py-0.5">apps/web/app/cronograma</code>.
+  </footer>
+</div>
+
+<!-- ===== Modal de escopo (ao abrir um card) ===== -->
+<div class="fixed inset-0 z-50 hidden items-center justify-center bg-foreground/50 p-4" style="backdrop-filter:blur(4px)" id="modal-overlay">
+  <div class="w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-card" style="max-height:85vh" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
+    <div class="mb-4 flex items-start justify-between gap-3">
+      <h3 class="font-display text-lg font-semibold text-foreground" id="modal-titulo">—</h3>
+      <button type="button" class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted" id="modal-close" aria-label="Fechar">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="mb-5 flex flex-wrap items-center gap-2" id="modal-meta"></div>
+    <p class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Escopo</p>
+    <div class="space-y-2.5 rounded-xl border border-primary/15 bg-primary/5 p-4 text-sm leading-relaxed text-foreground" id="modal-escopo"></div>
+    <div class="mt-5 flex justify-end">
+      <button type="button" class="inline-flex h-10 items-center justify-center rounded-xl border border-border px-4 text-sm font-medium text-foreground hover:bg-muted" id="modal-fechar-btn">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Interação 3: Modal "Adicionar à fila" (mesmo estilo visual do modal acima) ===== -->
+<div class="fixed inset-0 z-50 hidden items-center justify-center bg-foreground/50 p-4" style="backdrop-filter:blur(4px)" id="add-modal-overlay">
+  <div class="w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-card" style="max-height:85vh" role="dialog" aria-modal="true" aria-labelledby="add-modal-titulo">
+    <div class="mb-4 flex items-start justify-between gap-3">
+      <h3 class="font-display text-lg font-semibold text-foreground" id="add-modal-titulo">Adicionar item à fila</h3>
+      <button type="button" class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted" id="add-modal-close" aria-label="Fechar">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <form id="add-form" class="flex flex-col gap-4">
+      <div>
+        <label class="field-label" for="add-titulo">Título</label>
+        <input class="field-input" id="add-titulo" type="text" placeholder="Ex.: Exportar relatório em PDF" required maxlength="120">
+      </div>
+      <div>
+        <label class="field-label" for="add-descricao">Descrição curta</label>
+        <input class="field-input" id="add-descricao" type="text" placeholder="Resumo de uma linha para o card" required maxlength="160">
+      </div>
+      <div>
+        <label class="field-label" for="add-escopo">Escopo</label>
+        <textarea class="field-textarea" id="add-escopo" placeholder="O que é a tarefa e como deve ser feita — aparece no modal do item depois de criado."></textarea>
+      </div>
+      <div>
+        <label class="field-label" for="add-prioridade">Prioridade desejada <span class="normal-case font-normal tracking-normal text-muted-foreground/70">(opcional — só um registro visual, não muda a posição)</span></label>
+        <select class="field-select" id="add-prioridade">
+          <option value="">Sem preferência</option>
+          <option value="Baixa">Baixa</option>
+          <option value="Média" selected>Média</option>
+          <option value="Alta">Alta</option>
+        </select>
+      </div>
+
+      <p class="rounded-lg bg-muted/60 px-3 py-2 text-[11.5px] leading-snug text-muted-foreground">
+        O item entra sempre no <b class="text-foreground">fim da coluna Fila</b>, independente da prioridade escolhida acima. Para mudar a posição, arraste o card depois de criado.
+      </p>
+
+      <div class="mt-1 flex justify-end gap-2">
+        <button type="button" class="inline-flex h-10 items-center justify-center rounded-xl border border-border px-4 text-sm font-medium text-foreground hover:bg-muted" id="add-cancelar-btn">Cancelar</button>
+        <button type="submit" class="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90">
+          <svg class="icon-sm" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+          Adicionar à fila
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* Dado 100% sintético/fictício — só para testar as interações. */
+  var ITEM_SEQ = 0;
+  function novoId() { ITEM_SEQ += 1; return 'syn-' + ITEM_SEQ; }
+
+  var ITENS = [
+    { id: novoId(), titulo: 'Exemplo de item A', descricao: 'Descrição curta fictícia do item A, só para preencher o card.', escopo: 'Escopo fictício do item A: texto de exemplo para o modal, sem relação com o cronograma real.', status: 'CONCLUIDO', evidenciaCommit: 'a1b2c3d', atualizadoEm: '2026-10-02' },
+    { id: novoId(), titulo: 'Exemplo de item B', descricao: 'Descrição curta fictícia do item B, para dar volume à coluna Concluído.', escopo: 'Escopo fictício do item B.\nSegunda linha de escopo, só para testar quebra de parágrafo no modal.', status: 'CONCLUIDO', evidenciaCommit: 'e4f5a6b', atualizadoEm: '2026-10-09' },
+    { id: novoId(), titulo: 'Exemplo de item C', descricao: 'Descrição curta fictícia do item C.', escopo: 'Escopo fictício do item C.', status: 'CONCLUIDO', evidenciaCommit: 'c7d8e9f', atualizadoEm: '2026-10-15' },
+    { id: novoId(), titulo: 'Exemplo de item D', descricao: 'Descrição curta fictícia do item D.', escopo: 'Escopo fictício do item D.', status: 'CONCLUIDO', evidenciaCommit: 'f1a2b3c', atualizadoEm: '2026-10-21' },
+
+    { id: novoId(), titulo: 'Exemplo de item E', descricao: 'Descrição curta fictícia do item E, em desenvolvimento.', escopo: 'Escopo fictício do item E — em desenvolvimento no momento.', status: 'EM_EXECUCAO', atualizadoEm: '2026-11-10' },
+    { id: novoId(), titulo: 'Exemplo de item F', descricao: 'Descrição curta fictícia do item F, em desenvolvimento.', escopo: 'Escopo fictício do item F.', status: 'EM_EXECUCAO', atualizadoEm: '2026-11-12' },
+    { id: novoId(), titulo: 'Exemplo de item G', descricao: 'Descrição curta fictícia do item G, em desenvolvimento.', escopo: 'Escopo fictício do item G.', status: 'EM_EXECUCAO', atualizadoEm: '2026-11-14' },
+
+    { id: novoId(), titulo: 'Exemplo de item H', descricao: 'Descrição curta fictícia do item H, aguardando na fila.', escopo: 'Escopo fictício do item H.', status: 'FILA', ordem: 1, prioridadeDesejada: 'Alta' },
+    { id: novoId(), titulo: 'Exemplo de item I', descricao: 'Descrição curta fictícia do item I, aguardando na fila.', escopo: 'Escopo fictício do item I.', status: 'FILA', ordem: 2, prioridadeDesejada: 'Média' },
+    { id: novoId(), titulo: 'Exemplo de item J', descricao: 'Descrição curta fictícia do item J, aguardando na fila.', escopo: 'Escopo fictício do item J.', status: 'FILA', ordem: 3 },
+    { id: novoId(), titulo: 'Exemplo de item K', descricao: 'Descrição curta fictícia do item K, aguardando na fila.', escopo: 'Escopo fictício do item K.', status: 'FILA', ordem: 4, prioridadeDesejada: 'Baixa' }
+  ];
+
+  /* Interação 2: rótulo "Em execução" → "Em desenvolvimento" (só texto visível). */
+  var STATUS = {
+    FILA:        { rotulo: 'Fila',              badge: 'bg-muted text-muted-foreground', dot: 'hsl(var(--muted-foreground))' },
+    EM_EXECUCAO: { rotulo: 'Em desenvolvimento', badge: 'bg-primary/10 text-primary',     dot: 'hsl(var(--primary))' },
+    CONCLUIDO:   { rotulo: 'Concluído',          badge: 'bg-success/10 text-success',     dot: 'hsl(var(--success))' }
+  };
+
+  var ICONS = {
+    checkCircle: '<path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/>',
+    circleDot:   '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1" fill="currentColor"/>',
+    clock:       '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+    flag:        '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/>',
+    gitCommit:   '<path d="M12 3v6"/><circle cx="12" cy="12" r="3"/><path d="M12 15v6"/>',
+    calendar:    '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
+    chevronDown: '<path d="m6 9 6 6 6-6"/>',
+    grip:        '<circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/>'
+  };
+
+  function el(tag, attrs, children) {
+    var node = document.createElement(tag);
+    attrs = attrs || {};
+    Object.keys(attrs).forEach(function (k) {
+      if (k === 'class') node.className = attrs[k];
+      else if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]);
+      else node.setAttribute(k, attrs[k]);
+    });
+    (children || []).forEach(function (c) { if (c) node.appendChild(c); });
+    return node;
+  }
+  function text(s) { return document.createTextNode(s); }
+  function icon(name, cls) {
+    var wrap = document.createElement('span');
+    wrap.innerHTML = '<svg class="' + (cls || 'icon') + '" viewBox="0 0 24 24">' + ICONS[name] + '</svg>';
+    return wrap.firstChild;
+  }
+  function fmtData(iso) {
+    if (!iso) return '';
+    var d = new Date(iso + 'T00:00:00');
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', timeZone: 'America/Sao_Paulo' });
+  }
+  function fmtHora(d) {
+    function pad(n) { return String(n).padStart(2, '0'); }
+    return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  }
+  function statusBadge(statusId) {
+    var s = STATUS[statusId] || STATUS.FILA;
+    return el('span', { class: 'inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ' + s.badge }, [text(s.rotulo)]);
+  }
+  function prioridadeDesejadaBadge(valor) {
+    if (!valor) return null;
+    return el('span', { class: 'inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent' }, [
+      icon('flag', 'icon-sm'), text('Prioridade desejada: ' + valor)
+    ]);
+  }
+  function evidenciaLink(item) {
+    if (!item.evidenciaCommit) return null;
+    var a = el('a', { href: '#', class: 'inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline', title: 'Link de evidência (placeholder)' }, [
+      icon('gitCommit', 'icon-sm'), text('#' + item.evidenciaCommit)
+    ]);
+    a.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); });
+    return a;
+  }
+  function itemButton(cls, children, item) {
+    return el('button', { type: 'button', class: 'item-btn' + (cls ? ' ' + cls : ''), onclick: function () { abrirModal(item); } }, children);
+  }
+
+  var colunaColapsada = { FILA: false, EM_EXECUCAO: false, CONCLUIDO: false };
+
+  /* ---------- Modal de escopo ---------- */
+  var modalOverlay = document.getElementById('modal-overlay');
+  function abrirModal(item) {
+    document.getElementById('modal-titulo').textContent = item.titulo;
+    var meta = document.getElementById('modal-meta');
+    meta.innerHTML = '';
+    meta.appendChild(statusBadge(item.status));
+    if (item.prioridadeDesejada) meta.appendChild(prioridadeDesejadaBadge(item.prioridadeDesejada));
+    if (item.atualizadoEm) {
+      meta.appendChild(el('span', { class: 'inline-flex items-center gap-1 text-xs text-muted-foreground' }, [icon('calendar', 'icon-sm'), text(fmtData(item.atualizadoEm))]));
+    }
+    var link = evidenciaLink(item);
+    if (link) meta.appendChild(link);
+
+    var box = document.getElementById('modal-escopo');
+    box.innerHTML = '';
+    (item.escopo || item.descricao || 'Sem escopo registrado ainda.').split('\n').forEach(function (par) {
+      if (par.trim()) box.appendChild(el('p', {}, [text(par)]));
+    });
+
+    modalOverlay.classList.remove('hidden');
+    modalOverlay.classList.add('flex');
+    document.body.style.overflow = 'hidden';
+  }
+  function fecharModal() {
+    modalOverlay.classList.add('hidden');
+    modalOverlay.classList.remove('flex');
+    document.body.style.overflow = '';
+  }
+  document.getElementById('modal-close').addEventListener('click', fecharModal);
+  document.getElementById('modal-fechar-btn').addEventListener('click', fecharModal);
+  modalOverlay.addEventListener('click', function (e) { if (e.target === modalOverlay) fecharModal(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (!modalOverlay.classList.contains('hidden')) fecharModal();
+    if (!addModalOverlay.classList.contains('hidden')) fecharAddModal();
+  });
+
+  /* ---------- Interação 3: modal "Adicionar à fila" ---------- */
+  var addModalOverlay = document.getElementById('add-modal-overlay');
+  var addForm = document.getElementById('add-form');
+  function abrirAddModal() {
+    addForm.reset();
+    addModalOverlay.classList.remove('hidden');
+    addModalOverlay.classList.add('flex');
+    document.body.style.overflow = 'hidden';
+    setTimeout(function () { document.getElementById('add-titulo').focus(); }, 0);
+  }
+  function fecharAddModal() {
+    addModalOverlay.classList.add('hidden');
+    addModalOverlay.classList.remove('flex');
+    document.body.style.overflow = '';
+  }
+  document.getElementById('add-modal-close').addEventListener('click', fecharAddModal);
+  document.getElementById('add-cancelar-btn').addEventListener('click', fecharAddModal);
+  addModalOverlay.addEventListener('click', function (e) { if (e.target === addModalOverlay) fecharAddModal(); });
+
+  addForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var titulo = document.getElementById('add-titulo').value.trim();
+    var descricao = document.getElementById('add-descricao').value.trim();
+    var escopo = document.getElementById('add-escopo').value.trim();
+    var prioridadeDesejada = document.getElementById('add-prioridade').value;
+    if (!titulo || !descricao) return;
+
+    var maiorOrdem = ITENS.filter(function (i) { return i.status === 'FILA'; })
+      .reduce(function (acc, i) { return Math.max(acc, i.ordem || 0); }, 0);
+
+    var hoje = new Date();
+    var iso = hoje.getFullYear() + '-' + String(hoje.getMonth() + 1).padStart(2, '0') + '-' + String(hoje.getDate()).padStart(2, '0');
+
+    ITENS.push({
+      id: novoId(),
+      titulo: titulo,
+      descricao: descricao,
+      escopo: escopo || descricao,
+      status: 'FILA',
+      ordem: maiorOrdem + 1, // sempre no fim, independente da prioridade desejada
+      prioridadeDesejada: prioridadeDesejada || undefined,
+      atualizadoEm: iso,
+      recemAdicionado: true
+    });
+
+    fecharAddModal();
+    renderBoard();
+  });
+
+  /* ---------- Interação 5: colapsar/expandir coluna ---------- */
+  function colHeader(statusId, lista, extraRight) {
+    var chevron = icon('chevronDown', 'icon-sm col-chevron' + (colunaColapsada[statusId] ? ' collapsed' : ''));
+    var header = el('div', {
+      class: 'col-header',
+      role: 'button',
+      tabindex: '0',
+      'aria-expanded': String(!colunaColapsada[statusId]),
+      onclick: function () {
+        colunaColapsada[statusId] = !colunaColapsada[statusId];
+        renderBoard();
+      },
+      onkeydown: function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); colunaColapsada[statusId] = !colunaColapsada[statusId]; renderBoard(); }
+      }
+    }, [
+      el('div', { class: 'col-header-left' }, [
+        chevron,
+        el('h2', { class: 'truncate text-[11px] font-bold uppercase tracking-wider text-muted-foreground' }, [text(STATUS[statusId].rotulo)])
+      ]),
+      el('div', { class: 'flex shrink-0 items-center gap-1.5' }, [
+        el('span', { class: 'rounded-full border border-border bg-card px-2 py-0.5 text-[11px] font-bold tabular text-muted-foreground' }, [text(String(lista.length))]),
+        extraRight || null
+      ])
+    ]);
+    return header;
+  }
+
+  /* ---------- Interação 4: drag and drop dentro da coluna FILA ---------- */
+  var draggedId = null;
+
+  function filaCard(item, i) {
+    var meta = el('div', { class: 'flex items-center justify-between gap-2 pt-1' }, [
+      el('span', { class: 'text-[11px] tabular text-muted-foreground' }, [text(item.atualizadoEm ? fmtData(item.atualizadoEm) : '')])
+    ]);
+    var prio = prioridadeDesejadaBadge(item.prioridadeDesejada);
+    if (prio) meta.appendChild(prio);
+
+    var tituloRow = el('div', { class: 'flex items-start gap-2' }, [
+      icon('grip', 'icon-sm drag-handle'),
+      el('span', { class: 'mt-[5px] h-[7px] w-[7px] shrink-0 rounded-full', style: 'background:' + STATUS.FILA.dot, 'aria-hidden': 'true' }),
+      el('p', { class: 'font-display text-[13.5px] font-semibold leading-snug text-foreground' }, [text(item.titulo)])
+    ]);
+
+    var card = el('div', {
+      class: 'fila-card enter lift flex flex-col gap-2 rounded-xl border border-border bg-card p-3.5 shadow-soft',
+      style: 'animation-delay:' + (i * 40) + 'ms',
+      draggable: 'true',
+      'data-id': item.id,
+      ondragstart: function (e) {
+        draggedId = item.id;
+        e.dataTransfer.effectAllowed = 'move';
+        try { e.dataTransfer.setData('text/plain', item.id); } catch (err) {}
+        setTimeout(function () { card.classList.add('dragging'); }, 0);
+      },
+      ondragend: function () {
+        draggedId = null;
+        card.classList.remove('dragging');
+        document.querySelectorAll('.fila-card').forEach(function (c) { c.classList.remove('drag-over-top', 'drag-over-bottom'); });
+      },
+      ondragover: function (e) {
+        if (!draggedId || draggedId === item.id) return;
+        e.preventDefault();
+        var rect = card.getBoundingClientRect();
+        var antes = (e.clientY - rect.top) < rect.height / 2;
+        card.classList.toggle('drag-over-top', antes);
+        card.classList.toggle('drag-over-bottom', !antes);
+      },
+      ondragleave: function () {
+        card.classList.remove('drag-over-top', 'drag-over-bottom');
+      },
+      ondrop: function (e) {
+        e.preventDefault();
+        var antes = card.classList.contains('drag-over-top');
+        card.classList.remove('drag-over-top', 'drag-over-bottom');
+        if (!draggedId || draggedId === item.id) return;
+        reordenarFila(draggedId, item.id, antes);
+      }
+    }, [
+      tituloRow,
+      el('p', { class: 'line-clamp-2 pl-[15px] text-[12.5px] leading-snug text-muted-foreground' }, [text(item.descricao || '')]),
+      el('div', { class: 'pl-[15px]' }, [meta])
+    ]);
+
+    return itemButtonWrapper(card, item);
+  }
+
+  /* Mesmo botão de item das outras colunas, mas sem perder o draggable do card
+     interno — por isso o clique abre o modal só quando não houve drag. */
+  function itemButtonWrapper(innerEl, item) {
+    var wrapper = el('div', { class: 'item-btn', style: 'cursor:pointer' }, [innerEl]);
+    var moveu = false;
+    innerEl.addEventListener('dragstart', function () { moveu = true; });
+    wrapper.addEventListener('click', function (e) {
+      if (moveu) { moveu = false; return; }
+      abrirModal(item);
+    });
+    wrapper.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirModal(item); }
+    });
+    wrapper.setAttribute('tabindex', '0');
+    wrapper.setAttribute('role', 'button');
+    return wrapper;
+  }
+
+  function reordenarFila(movidoId, alvoId, antesDoAlvo) {
+    var fila = ITENS.filter(function (i) { return i.status === 'FILA'; }).sort(function (a, b) { return (a.ordem || 0) - (b.ordem || 0); });
+    var movido = fila.find(function (i) { return i.id === movidoId; });
+    if (!movido) return;
+    fila = fila.filter(function (i) { return i.id !== movidoId; });
+    var alvoIdx = fila.findIndex(function (i) { return i.id === alvoId; });
+    if (alvoIdx === -1) { fila.push(movido); }
+    else { fila.splice(antesDoAlvo ? alvoIdx : alvoIdx + 1, 0, movido); }
+    fila.forEach(function (i, idx) { i.ordem = idx + 1; });
+    renderBoard();
+  }
+
+  /* ---------- Quadro (Kanban) ---------- */
+  function renderBoard() {
+    var board = document.getElementById('board');
+    board.innerHTML = '';
+    var ativos = ITENS;
+    var total = ativos.length;
+    document.getElementById('board-resumo').textContent = total + (total === 1 ? ' item' : ' itens');
+    document.getElementById('stat-fila-n').textContent = String(ativos.filter(function (i) { return i.status === 'FILA'; }).length);
+
+    ['FILA', 'EM_EXECUCAO', 'CONCLUIDO'].forEach(function (statusId) {
+      var lista = ativos.filter(function (i) { return i.status === statusId; });
+      if (statusId === 'FILA') lista.sort(function (a, b) { return (a.ordem || 0) - (b.ordem || 0); });
+      else lista.sort(function (a, b) { return (a.atualizadoEm || '') < (b.atualizadoEm || '') ? 1 : -1; });
+
+      var extraRight = null;
+      if (statusId === 'FILA') {
+        extraRight = el('button', {
+          type: 'button',
+          class: 'btn-add-col',
+          'aria-label': 'Adicionar item à fila',
+          title: 'Adicionar item à fila',
+          onclick: function (e) { e.stopPropagation(); abrirAddModal(); }
+        }, []);
+        // ícone "+" inline (não está no mapa ICONS para manter o mapa enxuto)
+        extraRight.innerHTML = '<svg class="icon-sm" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg>';
+      }
+
+      var col = el('div', { class: 'flex flex-col gap-2.5 rounded-2xl border border-border bg-muted/40 p-3' });
+      col.appendChild(colHeader(statusId, lista, extraRight));
+
+      if (!colunaColapsada[statusId]) {
+        if (lista.length === 0) {
+          col.appendChild(el('div', { class: 'rounded-xl border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground' }, [text('Nada aqui no momento.')]));
+        } else if (statusId === 'FILA') {
+          lista.forEach(function (item, i) { col.appendChild(filaCard(item, i)); });
+        } else {
+          lista.forEach(function (item, i) {
+            var meta = el('div', { class: 'flex items-center justify-between gap-2 pt-1' }, [
+              el('span', { class: 'text-[11px] tabular text-muted-foreground' }, [text(item.atualizadoEm ? fmtData(item.atualizadoEm) : '')])
+            ]);
+            var link = evidenciaLink(item);
+            if (link) meta.appendChild(link);
+
+            var tituloRow = el('div', { class: 'flex items-start gap-2' }, [
+              el('span', { class: 'mt-[5px] h-[7px] w-[7px] shrink-0 rounded-full', style: 'background:' + STATUS[statusId].dot, 'aria-hidden': 'true' }),
+              el('p', { class: 'font-display text-[13.5px] font-semibold leading-snug text-foreground' }, [text(item.titulo)])
+            ]);
+
+            var card = el('div', {
+              class: 'enter lift flex flex-col gap-2 rounded-xl border border-border bg-card p-3.5 shadow-soft',
+              style: 'animation-delay:' + (i * 40) + 'ms'
+            }, [
+              tituloRow,
+              el('p', { class: 'line-clamp-2 pl-[15px] text-[12.5px] leading-snug text-muted-foreground' }, [text(item.descricao || '')]),
+              el('div', { class: 'pl-[15px]' }, [meta])
+            ]);
+            col.appendChild(itemButton('', [card], item));
+          });
+        }
+      }
+      board.appendChild(col);
+    });
+  }
+
+  /* ---------- Interação 1: botão Atualizar ---------- */
+  var btnAtualizar = document.getElementById('btn-atualizar');
+  var iconAtualizar = document.getElementById('icon-atualizar');
+  var labelAtualizar = document.getElementById('label-atualizar');
+  var ultimaAtualizacao = document.getElementById('ultima-atualizacao');
+  btnAtualizar.addEventListener('click', function () {
+    btnAtualizar.disabled = true;
+    iconAtualizar.classList.add('spin');
+    labelAtualizar.textContent = 'Atualizando...';
+    setTimeout(function () {
+      btnAtualizar.disabled = false;
+      iconAtualizar.classList.remove('spin');
+      labelAtualizar.textContent = 'Atualizar';
+      ultimaAtualizacao.textContent = 'Última atualização: ' + fmtHora(new Date());
+    }, 600);
+  });
+
+  /* ---------- Tabs (só Quadro é funcional; demais são placeholder) ---------- */
+  var paineis = { board: 'board', timeline: 'timeline-placeholder', table: 'table-placeholder' };
+  document.querySelectorAll('#view-tabs button').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('#view-tabs button').forEach(function (b) {
+        b.classList.toggle('active', b === btn);
+        b.setAttribute('aria-pressed', String(b === btn));
+      });
+      Object.keys(paineis).forEach(function (view) {
+        document.getElementById(paineis[view]).hidden = view !== btn.dataset.view;
+      });
+    });
+  });
+
+  renderBoard();
+})();
+</script>
+</body></html>

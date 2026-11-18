@@ -33,6 +33,7 @@ import {
   type FiltrosDashboard,
 } from '@/lib/dashboard-types';
 import { Logo } from '@/components/brand/logo';
+import { AssistenteFlutuante } from '@/components/dashboard/assistente-flutuante';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { FormattedDate } from '@/components/ui/formatted-date';
 import { UserAvatar } from '@/components/ui/user-avatar';
@@ -182,7 +183,7 @@ function DashboardContent() {
         }`}
       >
         <div className="flex h-16 items-center justify-between border-b border-border px-5">
-          <Logo href={comCredorId('/dashboard', credorId)} height={48} />
+          <Logo href={comCredorId('/dashboard', credorId)} height={56} />
           <button
             type="button"
             onClick={() => setMenuAberto(false)}
@@ -402,8 +403,13 @@ function DashboardContent() {
 
           {/* Geográfico */}
           <AnaliseGeografica dados={dados.metricasUf} />
+
+          {/* Reserva espaço para o widget fixo não cobrir o fim da página. */}
+          <div className="h-20" aria-hidden />
         </main>
       </div>
+
+      <AssistenteFlutuante href={comCredorId('/dashboard/relatorios', credorId)} />
     </div>
   );
 }

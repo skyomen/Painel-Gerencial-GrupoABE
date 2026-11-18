@@ -145,7 +145,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
         }`}
       >
         <div className="flex h-16 items-center justify-between border-b border-border px-5">
-          <Logo href="/admin/credores" height={48} />
+          <Logo href="/admin/credores" height={56} />
           <button
             type="button"
             onClick={() => setMenuAberto(false)}

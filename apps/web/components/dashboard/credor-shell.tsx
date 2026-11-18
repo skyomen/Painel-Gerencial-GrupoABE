@@ -79,7 +79,7 @@ export function CredorShell({
         }`}
       >
         <div className="flex h-16 items-center justify-between border-b border-border px-5">
-          <Logo href={comCredorId('/dashboard', credorId)} height={48} />
+          <Logo href={comCredorId('/dashboard', credorId)} height={56} />
           <button
             type="button"
             onClick={() => setMenuAberto(false)}

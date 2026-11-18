@@ -45,3 +45,6 @@ crash.log
 
 # Material de apoio local (referências visuais, não é código nem documentação do projeto)
 _referencias/
+
+# Cache local do Supabase CLI
+supabase/.temp/

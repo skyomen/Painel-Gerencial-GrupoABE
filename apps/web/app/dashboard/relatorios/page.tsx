@@ -3,17 +3,8 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
-import {
-  Download,
-  Filter,
-  History,
-  Loader2,
-  MapPin,
-  Send,
-  Sparkles,
-  Calendar,
-  FileText,
-} from 'lucide-react';
+import { Download, Filter, Loader2, MapPin, Send, Calendar, FileText } from 'lucide-react';
+import { AssistenteFlutuante } from '@/components/dashboard/assistente-flutuante';
 import { CredorShell } from '@/components/dashboard/credor-shell';
 import { FilterField, selectClass, inputClass } from '@/components/dashboard/global-filters';
 import { KpiSection } from '@/components/dashboard/kpi-section';
@@ -42,7 +33,6 @@ import {
   perguntarRelatorio,
   MAX_CARACTERES_PERGUNTA,
   type ContextoPergunta,
-  type PerguntaRecente,
   type RespostaPergunta,
 } from '@/lib/relatorios-api';
 import { nomeArquivoCsv, tabelaParaCsv } from '@/lib/relatorios-visualizacao';
@@ -118,12 +108,12 @@ function Construtor({ user, credorIdParam }: { user: AuthUser; credorIdParam: st
   const [perguntando, setPerguntando] = useState(false);
   const [resultado, setResultado] = useState<RespostaPergunta | null>(null);
   const [erro, setErro] = useState<ApiError | null>(null);
-  const [recentes, setRecentes] = useState<PerguntaRecente[]>([]);
+  const [chatAberto, setChatAberto] = useState(false);
 
   /**
    * Valor mais recente de `filtros`, sem depender do `useCallback` abaixo
-   * recriar a função a cada digitação — `carregarRecentes` só recria quando
-   * `credorId` muda, então o `filtros` fechado nela ficaria velho.
+   * recriar a função a cada digitação — `carregarIntervaloPadrao` só recria
+   * quando `credorId` muda, então o `filtros` fechado nela ficaria velho.
    */
   const filtrosRef = useRef(filtros);
   useEffect(() => {
@@ -132,17 +122,20 @@ function Construtor({ user, credorIdParam }: { user: AuthUser; credorIdParam: st
 
   /**
    * Aplica o intervalo de datas real do credor uma única vez, na primeira
-   * resposta do histórico que chegar — e só se o usuário ainda não tiver
-   * tocado nos campos de data. Depois disso a escolha é dele.
+   * resposta que chegar da rota de histórico — e só se o usuário ainda não
+   * tiver tocado nos campos de data. Depois disso a escolha é dele.
+   *
+   * A rota traz `perguntas` e `intervaloDisponivel` juntos (sem endpoint
+   * separado); o card "Perguntas recentes" saiu da tela, mas o intervalo
+   * continua vindo daqui.
    */
   const jaAplicouIntervaloRef = useRef(false);
 
-  const carregarRecentes = useCallback(() => {
+  const carregarIntervaloPadrao = useCallback(() => {
+    if (jaAplicouIntervaloRef.current) return;
+
     listarPerguntasRecentes(credorId)
       .then((r) => {
-        setRecentes(r.perguntas);
-
-        if (jaAplicouIntervaloRef.current) return;
         jaAplicouIntervaloRef.current = true;
 
         const aindaIntocado =
@@ -154,11 +147,11 @@ function Construtor({ user, credorIdParam }: { user: AuthUser; credorIdParam: st
           atualizarFiltros({ inicio: inicio ?? '', fim: fim ?? '' });
         }
       })
-      // O histórico é apoio: falhar nele não pode apagar a resposta na tela.
-      .catch(() => setRecentes([]));
+      // Intervalo padrão é conveniência: falhar nele não pode apagar a tela.
+      .catch(() => {});
   }, [credorId]);
 
-  useEffect(carregarRecentes, [carregarRecentes]);
+  useEffect(carregarIntervaloPadrao, [carregarIntervaloPadrao]);
 
   function atualizarFiltros(patch: Partial<FiltrosConsulta>) {
     setFiltros((prev) => ({ ...prev, ...patch }));
@@ -182,7 +175,6 @@ function Construtor({ user, credorIdParam }: { user: AuthUser; credorIdParam: st
 
     try {
       setResultado(await perguntarRelatorio({ pergunta: limpo, contexto, credorId }));
-      carregarRecentes();
     } catch (err) {
       setErro(toApiError(err));
     } finally {
@@ -243,72 +235,6 @@ function Construtor({ user, credorIdParam }: { user: AuthUser; credorIdParam: st
         </div>
       </section>
 
-      {/* Composer */}
-      <section className="rounded-2xl border border-border bg-card p-5 shadow-soft">
-        <div className="mb-3 flex items-start gap-2">
-          <span className="inline-flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-accent/10 text-accent">
-            <Sparkles className="h-4 w-4" />
-          </span>
-          <div>
-            <h2 className="font-display text-base font-semibold text-foreground">
-              O que você quer ver?
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              A IA só enxerga os dados da sua carteira — nunca os de outro credor.
-            </p>
-          </div>
-        </div>
-
-        <form
-          className="flex flex-col gap-2 sm:flex-row"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void enviar(pergunta);
-          }}
-        >
-          <input
-            value={pergunta}
-            onChange={(e) => setPergunta(e.target.value)}
-            maxLength={MAX_CARACTERES_PERGUNTA}
-            disabled={perguntando}
-            aria-label="Sua pergunta"
-            placeholder="Ex.: quanto da minha carteira ainda está em aberto?"
-            className="flex-1 rounded-xl border border-input bg-background px-4 py-3 text-sm text-foreground shadow-soft outline-none transition-all placeholder:text-muted-foreground/60 focus:border-primary focus:ring-4 focus:ring-primary/15 disabled:opacity-60"
-          />
-          <button
-            type="submit"
-            disabled={perguntando || pergunta.trim() === ''}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-deep disabled:opacity-60"
-          >
-            {perguntando ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-            {perguntando ? 'Consultando…' : 'Perguntar'}
-          </button>
-        </form>
-
-        <p className="mt-1.5 text-[11px] text-muted-foreground">
-          {pergunta.length}/{MAX_CARACTERES_PERGUNTA} caracteres
-        </p>
-
-        <ul className="mt-3 flex flex-wrap gap-2">
-          {SUGESTOES.map((s) => (
-            <li key={s}>
-              <button
-                type="button"
-                onClick={() => setPergunta(s)}
-                disabled={perguntando}
-                className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:opacity-60"
-              >
-                {s}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
-
       {erro && <BlocoErro erro={erro} />}
 
       {resultado && <BlocoResposta resultado={resultado} />}
@@ -325,7 +251,75 @@ function Construtor({ user, credorIdParam }: { user: AuthUser; credorIdParam: st
         </section>
       )}
 
-      <BlocoHistorico perguntas={recentes} />
+      {/* Reserva espaço para o widget fixo não cobrir o fim da página. */}
+      <div className="h-20" aria-hidden />
+
+      <AssistenteFlutuante
+        aberto={chatAberto}
+        onToggle={() => setChatAberto((v) => !v)}
+        carregando={perguntando}
+        painel={
+          <div className="w-full rounded-2xl border border-border bg-card p-5 shadow-card">
+            <div className="mb-3">
+              <h2 className="font-display text-base font-semibold text-foreground">
+                O que você quer ver?
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                A IA só enxerga os dados da sua carteira — nunca os de outro credor.
+              </p>
+            </div>
+
+            <form
+              className="flex flex-col gap-2 sm:flex-row"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void enviar(pergunta);
+              }}
+            >
+              <input
+                value={pergunta}
+                onChange={(e) => setPergunta(e.target.value)}
+                maxLength={MAX_CARACTERES_PERGUNTA}
+                disabled={perguntando}
+                aria-label="Sua pergunta"
+                placeholder="Ex.: quanto da minha carteira ainda está em aberto?"
+                className="flex-1 rounded-xl border border-input bg-background px-4 py-3 text-sm text-foreground shadow-soft outline-none transition-all placeholder:text-muted-foreground/60 focus:border-primary focus:ring-4 focus:ring-primary/15 disabled:opacity-60"
+              />
+              <button
+                type="submit"
+                disabled={perguntando || pergunta.trim() === ''}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-deep disabled:opacity-60"
+              >
+                {perguntando ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+                {perguntando ? 'Consultando…' : 'Perguntar'}
+              </button>
+            </form>
+
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              {pergunta.length}/{MAX_CARACTERES_PERGUNTA} caracteres
+            </p>
+
+            <ul className="mt-3 flex flex-wrap gap-2">
+              {SUGESTOES.map((s) => (
+                <li key={s}>
+                  <button
+                    type="button"
+                    onClick={() => setPergunta(s)}
+                    disabled={perguntando}
+                    className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:opacity-60"
+                  >
+                    {s}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        }
+      />
     </>
   );
 }
@@ -374,12 +368,7 @@ function BlocoResposta({ resultado }: { resultado: RespostaPergunta }) {
 
   return (
     <section className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-soft">
-      <div className="flex items-start gap-3">
-        <span className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-accent/10 text-accent">
-          <Sparkles className="h-4 w-4" />
-        </span>
-        <p className="text-sm leading-relaxed text-foreground">{resposta.textoResposta}</p>
-      </div>
+      <p className="text-sm leading-relaxed text-foreground">{resposta.textoResposta}</p>
 
       <KpiSection
         hideHeader
@@ -475,58 +464,6 @@ function BlocoResposta({ resultado }: { resultado: RespostaPergunta }) {
           {transparencia.aviso}
         </p>
       </details>
-    </section>
-  );
-}
-
-const STATUS_CLASSE: Record<string, string> = {
-  OK: 'border-success/30 bg-success/10 text-success',
-  REJEITADO: 'border-warning/30 bg-warning/10 text-warning',
-  ERRO: 'border-danger/30 bg-danger/10 text-danger',
-};
-
-function BlocoHistorico({ perguntas }: { perguntas: PerguntaRecente[] }) {
-  return (
-    <section className="rounded-2xl border border-border bg-card p-5 shadow-soft">
-      <h3 className="mb-3 flex items-center gap-2 font-display text-sm font-semibold text-foreground">
-        <History className="h-4 w-4 text-muted-foreground" />
-        Perguntas recentes
-      </h3>
-
-      {perguntas.length === 0 ? (
-        <p className="py-4 text-center text-sm text-muted-foreground">
-          Nenhuma pergunta registrada ainda.
-        </p>
-      ) : (
-        <ul className="space-y-2 text-sm">
-          {perguntas.map((p) => (
-            <li
-              key={p.id}
-              className="flex flex-col gap-1 rounded-xl px-3 py-2 transition-colors hover:bg-muted/60 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
-            >
-              <span className="min-w-0 truncate text-foreground">{p.perguntaTexto}</span>
-              <span className="flex flex-none items-center gap-2 text-xs text-muted-foreground">
-                <span
-                  className={`rounded-full border px-2 py-0.5 font-medium ${
-                    STATUS_CLASSE[p.status] ?? 'border-border bg-muted text-muted-foreground'
-                  }`}
-                >
-                  {p.status}
-                </span>
-                <span className="tabular-nums">
-                  {p.usuarioNome ? `${p.usuarioNome} · ` : ''}
-                  {new Date(p.criadoEm).toLocaleString('pt-BR', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </span>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
     </section>
   );
 }

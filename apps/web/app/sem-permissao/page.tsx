@@ -9,7 +9,7 @@ export default function SemPermissaoPage() {
     <main className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
       <div className="w-full max-w-md space-y-6 text-center">
         <div className="flex justify-center">
-          <Logo href="/login" height={180} />
+          <Logo href="/login" height={220} />
         </div>
         <div className="rounded-2xl border border-border bg-card p-8 shadow-soft">
           <span className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-xl bg-destructive/10 text-destructive">

@@ -47,6 +47,7 @@ import {
   Loader2,
   Plus,
   RefreshCw,
+  Sparkles,
   X,
 } from 'lucide-react';
 import {
@@ -160,6 +161,14 @@ const MESES_LONGOS = [
   'novembro',
   'dezembro',
 ];
+
+/**
+ * Mínimo de caracteres no rascunho de Escopo para o botão "Escopar com IA"
+ * (DEC-0079) habilitar — abaixo disso não há contexto suficiente para valer a
+ * pena mandar para a IA. Precisa bater com o mínimo que a rota
+ * `/api/cronograma/escopar-ia` valida.
+ */
+const MIN_CARACTERES_ESCOPO_IA = 30;
 
 function fmtData(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
@@ -450,17 +459,69 @@ export default function CronogramaPage() {
   const [addEnviando, setAddEnviando] = useState(false);
   const [addErro, setAddErro] = useState<string | null>(null);
 
+  // ----- Botão "Escopar com IA" dentro do modal "Adicionar à fila" (DEC-0079) -----
+  const [escoparIaEnviando, setEscoparIaEnviando] = useState(false);
+  const [escoparIaErro, setEscoparIaErro] = useState<string | null>(null);
+
   function abrirAddModal() {
     setAddTitulo('');
     setAddDescricao('');
     setAddEscopo('');
     setAddPrioridade('');
     setAddErro(null);
+    setEscoparIaEnviando(false);
+    setEscoparIaErro(null);
     setAddModalAberto(true);
   }
   function fecharAddModal() {
     setAddModalAberto(false);
     setAddErro(null);
+    setEscoparIaEnviando(false);
+    setEscoparIaErro(null);
+  }
+
+  const escoparIaHabilitado =
+    addTitulo.trim() !== '' &&
+    addDescricao.trim() !== '' &&
+    addEscopo.trim().length >= MIN_CARACTERES_ESCOPO_IA;
+
+  /**
+   * Chama `/api/cronograma/escopar-ia` (DEC-0079) com o rascunho atual dos três
+   * campos do formulário. Sucesso substitui o rascunho pelo escopo gerado, para
+   * o usuário revisar antes de "Adicionar à fila" — nunca trava esse botão, que
+   * continua funcionando exatamente como hoje independente desta chamada.
+   */
+  async function handleEscoparComIA() {
+    if (!escoparIaHabilitado || escoparIaEnviando) return;
+
+    setEscoparIaEnviando(true);
+    setEscoparIaErro(null);
+    try {
+      const res = await fetch('/api/cronograma/escopar-ia', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          titulo: addTitulo,
+          descricao: addDescricao,
+          escopo: addEscopo,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setEscoparIaErro(
+          (data && typeof data.error === 'string' && data.error) ||
+            'Não foi possível gerar o escopo.',
+        );
+        return;
+      }
+      if (typeof data?.escopo === 'string') {
+        setAddEscopo(data.escopo);
+      }
+    } catch {
+      setEscoparIaErro('Não foi possível gerar o escopo. Verifique sua conexão.');
+    } finally {
+      setEscoparIaEnviando(false);
+    }
   }
 
   async function handleAddSubmit(e: FormEvent) {
@@ -1286,6 +1347,32 @@ export default function CronogramaPage() {
                   placeholder="O que é a tarefa e como deve ser feita — aparece no modal do item depois de criado."
                   className="min-h-[4.5rem] w-full resize-y rounded-xl border border-input bg-card px-3 py-2.5 text-sm text-foreground focus:border-primary/60 focus:outline-none"
                 />
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleEscoparComIA}
+                    disabled={!escoparIaHabilitado || escoparIaEnviando}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:border-primary/50 hover:bg-primary/15 disabled:cursor-default disabled:opacity-50"
+                  >
+                    {escoparIaEnviando ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-3.5 w-3.5" />
+                    )}
+                    {escoparIaEnviando ? 'Gerando escopo...' : 'Escopar com IA'}
+                  </button>
+                  {!escoparIaHabilitado && !escoparIaEnviando && (
+                    <span className="text-[11px] text-muted-foreground">
+                      Preencha título, descrição e pelo menos {MIN_CARACTERES_ESCOPO_IA} caracteres
+                      no escopo para usar a IA.
+                    </span>
+                  )}
+                </div>
+                {escoparIaErro && (
+                  <p className="mt-2 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
+                    {escoparIaErro}
+                  </p>
+                )}
               </div>
               <div>
                 <label

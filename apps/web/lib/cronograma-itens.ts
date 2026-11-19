@@ -25,4 +25,23 @@ export interface CronogramaItem {
   evidenciaCommit?: string | null;
   atualizadoEm: string;
   motivoRecusa?: string | null;
+  /**
+   * TRUE só para itens inseridos pelo botão "+" da própria página
+   * (DEC-0078) — único caso em que a tela oferece mover por drag entre
+   * colunas e excluir. Itens oficiais do roadmap (seed da migration 018)
+   * vêm com FALSE e não ganham essas ações.
+   */
+  criadoViaPagina: boolean;
+}
+
+/**
+ * Entrada do histórico público de exclusões (DEC-0078) — exibida sempre
+ * visível abaixo do quadro, mesmo vazia.
+ */
+export interface CronogramaExclusao {
+  id: string;
+  itemTitulo: string;
+  nome: string;
+  motivo: string;
+  excluidoEm: string;
 }

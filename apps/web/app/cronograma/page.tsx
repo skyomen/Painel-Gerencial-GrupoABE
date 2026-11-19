@@ -24,7 +24,14 @@
  * do hero escuro que o `AdminShell` desenhava via `pageMeta()`.
  */
 
-import { useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 import {
   CalendarDays,
   CheckCircle2,
@@ -48,6 +55,8 @@ import {
   DragOverlay,
   KeyboardSensor,
   PointerSensor,
+  useDraggable,
+  useDroppable,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -63,6 +72,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { Logo } from '@/components/brand/logo';
 import {
+  type CronogramaExclusao,
   type CronogramaItem,
   type CronogramaPrioridadeDesejada,
   type CronogramaStatus,
@@ -137,11 +147,19 @@ function rotuloMes(iso: string): string {
   return `${MESES_LONGOS[d.getMonth()]} de ${d.getFullYear()}`;
 }
 
-async function fetchCronograma(): Promise<CronogramaItem[]> {
+interface CronogramaResponse {
+  itens: CronogramaItem[];
+  exclusoes: CronogramaExclusao[];
+}
+
+async function fetchCronograma(): Promise<CronogramaResponse> {
   const res = await fetch('/api/cronograma');
   if (!res.ok) throw new Error(`Não foi possível carregar o cronograma (${res.status}).`);
   const data = await res.json();
-  return Array.isArray(data?.itens) ? (data.itens as CronogramaItem[]) : [];
+  return {
+    itens: Array.isArray(data?.itens) ? (data.itens as CronogramaItem[]) : [],
+    exclusoes: Array.isArray(data?.exclusoes) ? (data.exclusoes as CronogramaExclusao[]) : [],
+  };
 }
 
 function StatusBadge({ status }: { status: CronogramaStatus }) {
@@ -207,6 +225,7 @@ export default function CronogramaPage() {
 
   // ----- Carregamento dos dados (interação 1 cobre o refresh manual) -----
   const [itens, setItens] = useState<CronogramaItem[] | null>(null);
+  const [historico, setHistorico] = useState<CronogramaExclusao[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erroCarregar, setErroCarregar] = useState<string | null>(null);
   const [atualizando, setAtualizando] = useState(false);
@@ -216,10 +235,15 @@ export default function CronogramaPage() {
     let cancelado = false;
     (async () => {
       try {
-        const novos = await fetchCronograma();
+        const { itens: novos, exclusoes: novasExclusoes } = await fetchCronograma();
         if (!cancelado) {
           setItens(novos);
+          setHistorico(novasExclusoes);
           setErroCarregar(null);
+          // Bug corrigido: antes só `handleAtualizar` chamava isto — ao
+          // recarregar a página (F5) "Última atualização" voltava para "—"
+          // mesmo tendo acabado de carregar os dados agora.
+          setUltimaAtualizacao(new Date());
         }
       } catch (e) {
         if (!cancelado) {
@@ -239,8 +263,9 @@ export default function CronogramaPage() {
   async function handleAtualizar() {
     setAtualizando(true);
     try {
-      const novos = await fetchCronograma();
+      const { itens: novos, exclusoes: novasExclusoes } = await fetchCronograma();
       setItens(novos);
+      setHistorico(novasExclusoes);
       setErroCarregar(null);
       setUltimaAtualizacao(new Date());
     } catch (e) {
@@ -279,8 +304,9 @@ export default function CronogramaPage() {
     } catch {
       // Resync simples com o servidor — sem retry nem fila de novas tentativas.
       try {
-        const novos = await fetchCronograma();
+        const { itens: novos, exclusoes: novasExclusoes } = await fetchCronograma();
         setItens(novos);
+        setHistorico(novasExclusoes);
       } catch {
         // Mantém o estado local otimista; a próxima atualização manual tenta de novo.
       }
@@ -307,20 +333,78 @@ export default function CronogramaPage() {
     setItemArrastado(item ?? null);
   }
 
+  /** `over.id` é um dos 3 status quando o drop caiu em área vazia da coluna (ver `ColunaDroppable`). */
+  function ehStatusColuna(id: string): id is CronogramaStatus {
+    return (COLUNAS_QUADRO as string[]).includes(id);
+  }
+
   function handleFilaDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     setItemArrastado(null);
     if (!over || active.id === over.id) return;
 
-    const filaIds = ativos
-      .filter((i) => i.status === 'FILA')
-      .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0))
-      .map((i) => i.id);
-    const oldIndex = filaIds.indexOf(String(active.id));
-    const newIndex = filaIds.indexOf(String(over.id));
-    if (oldIndex === -1 || newIndex === -1) return;
+    const activeItem = ativos.find((i) => i.id === active.id);
+    if (!activeItem) return;
 
-    aplicarNovaOrdemFila(arrayMove(filaIds, oldIndex, newIndex));
+    // Caso 1: reorder dentro da FILA — comportamento já existente, inalterado.
+    if (activeItem.status === 'FILA') {
+      const filaIds = ativos
+        .filter((i) => i.status === 'FILA')
+        .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0))
+        .map((i) => i.id);
+      const oldIndex = filaIds.indexOf(String(active.id));
+      const newIndex = filaIds.indexOf(String(over.id));
+      if (oldIndex !== -1 && newIndex !== -1) {
+        aplicarNovaOrdemFila(arrayMove(filaIds, oldIndex, newIndex));
+        return;
+      }
+    }
+
+    // Caso 2: mover para outra coluna (DEC-0078) — só para item criado pela página.
+    if (!activeItem.criadoViaPagina) return;
+
+    const overId = String(over.id);
+    const destino = ehStatusColuna(overId) ? overId : ativos.find((i) => i.id === overId)?.status;
+
+    if (!destino || destino === activeItem.status) return;
+
+    void moverItemEntreColunas(activeItem, destino);
+  }
+
+  /**
+   * Move um item (só `criadoViaPagina === true`) para outra coluna: aplica o
+   * novo status/ordem otimisticamente no estado local e chama o PATCH que
+   * exercita a RPC `cronograma_mover_item_pagina` (migration 019). Em caso
+   * de erro, resync simples com o servidor — mesmo padrão de `patchFilaOrdem`.
+   */
+  async function moverItemEntreColunas(item: CronogramaItem, destino: CronogramaStatus) {
+    setItens((prev) => {
+      if (!prev) return prev;
+      const novaOrdem =
+        destino === 'FILA'
+          ? prev
+              .filter((i) => i.status === 'FILA')
+              .reduce((acc, i) => Math.max(acc, i.ordem ?? 0), 0) + 1
+          : null;
+      return prev.map((i) => (i.id === item.id ? { ...i, status: destino, ordem: novaOrdem } : i));
+    });
+
+    try {
+      const res = await fetch(`/api/cronograma/itens/${item.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: destino }),
+      });
+      if (!res.ok) throw new Error('mover item respondeu com erro');
+    } catch {
+      try {
+        const { itens: novos, exclusoes: novasExclusoes } = await fetchCronograma();
+        setItens(novos);
+        setHistorico(novasExclusoes);
+      } catch {
+        // Mantém o estado local otimista; a próxima atualização manual tenta de novo.
+      }
+    }
   }
 
   // ----- Modal "Adicionar à fila" (interação 3) -----
@@ -381,6 +465,64 @@ export default function CronogramaPage() {
       setAddErro('Não foi possível adicionar o item. Verifique sua conexão.');
     } finally {
       setAddEnviando(false);
+    }
+  }
+
+  // ----- Excluir item (DEC-0078, só criadoViaPagina === true) -----
+  const [confirmExcluirAberto, setConfirmExcluirAberto] = useState(false);
+  const [excluirNome, setExcluirNome] = useState('');
+  const [excluirMotivo, setExcluirMotivo] = useState('');
+  const [excluirEnviando, setExcluirEnviando] = useState(false);
+  const [excluirErro, setExcluirErro] = useState<string | null>(null);
+
+  function abrirConfirmExcluir() {
+    setExcluirNome('');
+    setExcluirMotivo('');
+    setExcluirErro(null);
+    setConfirmExcluirAberto(true);
+  }
+  function fecharConfirmExcluir() {
+    setConfirmExcluirAberto(false);
+    setExcluirErro(null);
+  }
+
+  async function handleExcluirSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!itemAberto) return;
+    const nome = excluirNome.trim();
+    const motivo = excluirMotivo.trim();
+    if (!nome || !motivo) return;
+
+    const itemId = itemAberto.id;
+    setExcluirEnviando(true);
+    setExcluirErro(null);
+    try {
+      const res = await fetch(`/api/cronograma/itens/${itemId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome, motivo }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setExcluirErro(
+          (data && typeof data.error === 'string' && data.error) ||
+            'Não foi possível excluir o item.',
+        );
+        return;
+      }
+      // Validação de verdade mora na RPC (lista de nomes, motivo obrigatório)
+      // — não duplicada aqui. `data.error` acima já é a mensagem dela.
+      const exclusao = data?.exclusao as CronogramaExclusao | undefined;
+      setItens((prev) => (prev ? prev.filter((i) => i.id !== itemId) : prev));
+      if (exclusao) {
+        setHistorico((prev) => [exclusao, ...prev]);
+      }
+      setConfirmExcluirAberto(false);
+      setItemAberto(null);
+    } catch {
+      setExcluirErro('Não foi possível excluir o item. Verifique sua conexão.');
+    } finally {
+      setExcluirEnviando(false);
     }
   }
 
@@ -596,10 +738,7 @@ export default function CronogramaPage() {
                       const colapsada = colunaColapsada[statusId];
 
                       return (
-                        <div
-                          key={statusId}
-                          className="flex flex-col gap-2.5 rounded-2xl border border-border bg-muted/40 p-3"
-                        >
+                        <ColunaDroppable key={statusId} statusId={statusId}>
                           <div
                             role="button"
                             tabIndex={0}
@@ -664,40 +803,15 @@ export default function CronogramaPage() {
                               </SortableContext>
                             ) : (
                               lista.map((item) => (
-                                <button
+                                <ItemQuadroCard
                                   key={item.id}
-                                  type="button"
-                                  onClick={() => setItemAberto(item)}
-                                  className="block w-full rounded-xl text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                                >
-                                  <div className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3.5 shadow-soft transition-colors hover:border-primary/40">
-                                    <div className="flex items-start gap-2">
-                                      <span
-                                        className={`mt-[6px] h-[7px] w-[7px] shrink-0 rounded-full ${STATUS_INFO[statusId].dot}`}
-                                        aria-hidden="true"
-                                      />
-                                      <p className="font-display text-[13.5px] font-semibold leading-snug text-foreground">
-                                        {item.titulo}
-                                      </p>
-                                    </div>
-                                    <p className="line-clamp-2 pl-[15px] text-[12.5px] leading-snug text-muted-foreground">
-                                      {item.descricao}
-                                    </p>
-                                    <div className="flex items-center justify-between gap-2 pl-[15px] pt-1">
-                                      <span className="text-[11px] tabular-nums text-muted-foreground">
-                                        {item.atualizadoEm ? fmtData(item.atualizadoEm) : ''}
-                                      </span>
-                                      {item.evidenciaCommit ? (
-                                        <EvidenciaLink item={item} />
-                                      ) : item.prioridade != null ? (
-                                        <PrioridadeBadge n={item.prioridade} />
-                                      ) : null}
-                                    </div>
-                                  </div>
-                                </button>
+                                  item={item}
+                                  statusId={statusId}
+                                  onAbrir={() => setItemAberto(item)}
+                                />
                               ))
                             ))}
-                        </div>
+                        </ColunaDroppable>
                       );
                     })}
                   </div>
@@ -825,6 +939,35 @@ export default function CronogramaPage() {
                 </div>
               </details>
             )}
+
+            {/* ===== Histórico de exclusões (DEC-0078) — sempre visível, mesmo vazio ===== */}
+            <details className="rounded-3xl border border-border bg-card shadow-soft">
+              <summary className="flex cursor-pointer items-center justify-between px-5 py-4 text-sm font-semibold text-muted-foreground sm:px-6">
+                Histórico de exclusões
+              </summary>
+              <div className="flex flex-col gap-3 px-5 pb-5 sm:px-6">
+                {historico.length === 0 ? (
+                  <p className="text-[12.5px] text-muted-foreground">
+                    Nenhuma exclusão registrada.
+                  </p>
+                ) : (
+                  historico.map((exclusao) => (
+                    <div
+                      key={exclusao.id}
+                      className="border-t border-dashed border-border pt-3 text-[12.5px] text-muted-foreground first:border-0 first:pt-0"
+                    >
+                      <b className="text-foreground">{exclusao.itemTitulo}</b> — excluído por{' '}
+                      {exclusao.nome}
+                      {exclusao.motivo ? `: ${exclusao.motivo}` : ''}
+                      <div className="mt-0.5 text-[11px] text-muted-foreground/80">
+                        {fmtData(exclusao.excluidoEm.slice(0, 10))} às{' '}
+                        {fmtHora(new Date(exclusao.excluidoEm))}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </details>
           </>
         )}
       </main>
@@ -888,7 +1031,18 @@ export default function CronogramaPage() {
                 ))}
             </div>
 
-            <div className="mt-5 flex justify-end">
+            <div className="mt-5 flex items-center justify-between gap-2">
+              {itemAberto.criadoViaPagina ? (
+                <button
+                  type="button"
+                  onClick={abrirConfirmExcluir}
+                  className="inline-flex h-10 items-center justify-center rounded-xl border border-danger/30 bg-danger/10 px-4 text-sm font-medium text-danger hover:bg-danger/20"
+                >
+                  Excluir
+                </button>
+              ) : (
+                <span />
+              )}
               <button
                 type="button"
                 onClick={() => setItemAberto(null)}
@@ -897,6 +1051,104 @@ export default function CronogramaPage() {
                 Fechar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Modal de confirmação de exclusão (DEC-0078) ===== */}
+      {confirmExcluirAberto && itemAberto && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/50 p-4 backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) fecharConfirmExcluir();
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="excluir-modal-titulo"
+            className="w-full max-w-md overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-card"
+            style={{ maxHeight: '85vh' }}
+          >
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <h3
+                id="excluir-modal-titulo"
+                className="font-display text-lg font-semibold text-foreground"
+              >
+                Excluir item
+              </h3>
+              <button
+                type="button"
+                onClick={fecharConfirmExcluir}
+                aria-label="Fechar"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <p className="mb-4 text-sm text-foreground">
+              Tem certeza que deseja excluir &quot;{itemAberto.titulo}&quot;? Essa ação não pode ser
+              desfeita.
+            </p>
+
+            <form onSubmit={handleExcluirSubmit} className="flex flex-col gap-4">
+              <div>
+                <label
+                  htmlFor="excluir-nome"
+                  className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+                >
+                  Seu nome
+                </label>
+                <input
+                  id="excluir-nome"
+                  type="text"
+                  value={excluirNome}
+                  onChange={(e) => setExcluirNome(e.target.value)}
+                  required
+                  className="w-full rounded-xl border border-input bg-card px-3 py-2.5 text-sm text-foreground focus:border-primary/60 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="excluir-motivo"
+                  className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+                >
+                  Motivo da exclusão
+                </label>
+                <textarea
+                  id="excluir-motivo"
+                  value={excluirMotivo}
+                  onChange={(e) => setExcluirMotivo(e.target.value)}
+                  required
+                  className="min-h-[4.5rem] w-full resize-y rounded-xl border border-input bg-card px-3 py-2.5 text-sm text-foreground focus:border-primary/60 focus:outline-none"
+                />
+              </div>
+
+              {excluirErro && (
+                <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
+                  {excluirErro}
+                </p>
+              )}
+
+              <div className="mt-1 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={fecharConfirmExcluir}
+                  className="inline-flex h-10 items-center justify-center rounded-xl border border-border px-4 text-sm font-medium text-foreground hover:bg-muted"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={excluirEnviando}
+                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-danger px-4 text-sm font-medium text-white hover:opacity-90 disabled:cursor-default disabled:opacity-75"
+                >
+                  {excluirEnviando && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Excluir
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -1101,13 +1353,26 @@ function SortHeader({
   );
 }
 
-/** Conteúdo visual do card da fila — compartilhado entre o card arrastável (`FilaCard`) e a cópia flutuante do `DragOverlay` (`FilaCardOverlay`). */
-function FilaCardConteudo({ item }: { item: CronogramaItem }) {
+/**
+ * Conteúdo visual do card da fila — compartilhado entre o card arrastável
+ * (`FilaCard`) e a cópia flutuante do `DragOverlay` (`FilaCardOverlay`).
+ * `dotClassName` é opcional (default = cor da FILA) porque, com o drag
+ * cross-coluna (DEC-0078), o `DragOverlay` pode estar exibindo um item que
+ * veio de EM_EXECUCAO/CONCLUIDO — a cor do ponto deve seguir o status real
+ * do item, não sempre a da fila.
+ */
+function FilaCardConteudo({
+  item,
+  dotClassName = STATUS_INFO.FILA.dot,
+}: {
+  item: CronogramaItem;
+  dotClassName?: string;
+}) {
   return (
     <>
       <div className="flex items-start gap-2">
         <span
-          className={`mt-[6px] h-[7px] w-[7px] shrink-0 rounded-full ${STATUS_INFO.FILA.dot}`}
+          className={`mt-[6px] h-[7px] w-[7px] shrink-0 rounded-full ${dotClassName}`}
           aria-hidden="true"
         />
         <p className="font-display text-[13.5px] font-semibold leading-snug text-foreground">
@@ -1176,7 +1441,152 @@ function FilaCard({ item, onAbrir }: { item: CronogramaItem; onAbrir: () => void
 function FilaCardOverlay({ item }: { item: CronogramaItem }) {
   return (
     <div className="flex cursor-grabbing flex-col gap-2 rounded-xl border border-primary/40 bg-card p-3.5 shadow-card motion-safe:scale-[1.03] motion-safe:-rotate-1">
-      <FilaCardConteudo item={item} />
+      <FilaCardConteudo item={item} dotClassName={STATUS_INFO[item.status].dot} />
+    </div>
+  );
+}
+
+/**
+ * Torna cada uma das 3 colunas do quadro um alvo de drop (`useDroppable`),
+ * além dos alvos já existentes por item (`useSortable`/`useDraggable`) — sem
+ * isto, soltar um card numa área vazia da coluna (sem nenhum outro item por
+ * perto) não geraria nenhum `over` para o `handleFilaDragEnd` resolver
+ * (DEC-0078).
+ */
+function ColunaDroppable({
+  statusId,
+  children,
+}: {
+  statusId: CronogramaStatus;
+  children: ReactNode;
+}) {
+  const { setNodeRef } = useDroppable({ id: statusId });
+  return (
+    <div
+      ref={setNodeRef}
+      className="flex flex-col gap-2.5 rounded-2xl border border-border bg-muted/40 p-3"
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Card das colunas EM_EXECUCAO/CONCLUIDO. Mantém o `<button>` estático de
+ * hoje para itens oficiais do roadmap (`criadoViaPagina === false` — sem
+ * handle de drag, sem alteração visual) e só ganha o drag cross-coluna
+ * (DEC-0078) para item criado pela própria página, com o MESMO efeito
+ * visual de grab/scale/rotate/shadow que `FilaCard` já usa.
+ */
+function ItemQuadroCard({
+  item,
+  statusId,
+  onAbrir,
+}: {
+  item: CronogramaItem;
+  statusId: CronogramaStatus;
+  onAbrir: () => void;
+}) {
+  if (!item.criadoViaPagina) {
+    return (
+      <button
+        type="button"
+        onClick={onAbrir}
+        className="block w-full rounded-xl text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+      >
+        <div className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3.5 shadow-soft transition-colors hover:border-primary/40">
+          <div className="flex items-start gap-2">
+            <span
+              className={`mt-[6px] h-[7px] w-[7px] shrink-0 rounded-full ${STATUS_INFO[statusId].dot}`}
+              aria-hidden="true"
+            />
+            <p className="font-display text-[13.5px] font-semibold leading-snug text-foreground">
+              {item.titulo}
+            </p>
+          </div>
+          <p className="line-clamp-2 pl-[15px] text-[12.5px] leading-snug text-muted-foreground">
+            {item.descricao}
+          </p>
+          <div className="flex items-center justify-between gap-2 pl-[15px] pt-1">
+            <span className="text-[11px] tabular-nums text-muted-foreground">
+              {item.atualizadoEm ? fmtData(item.atualizadoEm) : ''}
+            </span>
+            {item.evidenciaCommit ? (
+              <EvidenciaLink item={item} />
+            ) : item.prioridade != null ? (
+              <PrioridadeBadge n={item.prioridade} />
+            ) : null}
+          </div>
+        </div>
+      </button>
+    );
+  }
+
+  return <ItemQuadroCardArrastavel item={item} statusId={statusId} onAbrir={onAbrir} />;
+}
+
+/** Variante arrastável (`useDraggable`) de `ItemQuadroCard`, só para item com `criadoViaPagina === true`. */
+function ItemQuadroCardArrastavel({
+  item,
+  statusId,
+  onAbrir,
+}: {
+  item: CronogramaItem;
+  statusId: CronogramaStatus;
+  onAbrir: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: item.id,
+  });
+
+  const style = {
+    transform: CSS.Translate.toString(transform),
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      role="button"
+      tabIndex={0}
+      data-id={item.id}
+      onClick={onAbrir}
+      onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onAbrir();
+        }
+      }}
+      className={`relative flex cursor-pointer flex-col gap-2 rounded-xl border border-border bg-card p-3.5 shadow-soft transition-[transform,box-shadow,border-color,opacity] duration-150 ease-spring hover:border-primary/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
+        isDragging
+          ? 'cursor-grabbing opacity-60 shadow-card outline outline-2 outline-dashed outline-primary/50 motion-safe:scale-[1.03] motion-safe:-rotate-1'
+          : ''
+      }`}
+    >
+      <div className="flex items-start gap-2">
+        <span
+          className={`mt-[6px] h-[7px] w-[7px] shrink-0 rounded-full ${STATUS_INFO[statusId].dot}`}
+          aria-hidden="true"
+        />
+        <p className="font-display text-[13.5px] font-semibold leading-snug text-foreground">
+          {item.titulo}
+        </p>
+      </div>
+      <p className="line-clamp-2 pl-[15px] text-[12.5px] leading-snug text-muted-foreground">
+        {item.descricao}
+      </p>
+      <div className="flex items-center justify-between gap-2 pl-[15px] pt-1">
+        <span className="text-[11px] tabular-nums text-muted-foreground">
+          {item.atualizadoEm ? fmtData(item.atualizadoEm) : ''}
+        </span>
+        {item.evidenciaCommit ? (
+          <EvidenciaLink item={item} />
+        ) : item.prioridade != null ? (
+          <PrioridadeBadge n={item.prioridade} />
+        ) : null}
+      </div>
     </div>
   );
 }

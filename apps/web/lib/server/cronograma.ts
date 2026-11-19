@@ -22,6 +22,7 @@ export interface CronogramaItemRow {
   motivo_recusa: string | null;
   atualizado_em: string;
   criado_em: string;
+  criado_via_pagina: boolean;
 }
 
 export interface CronogramaItemDTO {
@@ -35,6 +36,7 @@ export interface CronogramaItemDTO {
   evidenciaCommit: string | null;
   atualizadoEm: string;
   motivoRecusa: string | null;
+  criadoViaPagina: boolean;
 }
 
 export function toCronogramaItemDTO(row: CronogramaItemRow): CronogramaItemDTO {
@@ -49,5 +51,41 @@ export function toCronogramaItemDTO(row: CronogramaItemRow): CronogramaItemDTO {
     evidenciaCommit: row.evidencia_commit,
     atualizadoEm: row.atualizado_em,
     motivoRecusa: row.motivo_recusa,
+    criadoViaPagina: row.criado_via_pagina,
+  };
+}
+
+/**
+ * Histórico público de exclusões de itens do cronograma (DEC-0078, migration
+ * 019) — gravado pela RPC `cronograma_excluir_item_pagina` antes de apagar o
+ * item. `item_id`/`itemId` não tem FK: o item já não existe mais em
+ * `cronograma_itens` quando este registro é lido.
+ */
+export interface CronogramaExclusaoRow {
+  id: string;
+  item_id: string;
+  item_titulo: string;
+  nome: string;
+  motivo: string;
+  excluido_em: string;
+}
+
+export interface CronogramaExclusaoDTO {
+  id: string;
+  itemId: string;
+  itemTitulo: string;
+  nome: string;
+  motivo: string;
+  excluidoEm: string;
+}
+
+export function toCronogramaExclusaoDTO(row: CronogramaExclusaoRow): CronogramaExclusaoDTO {
+  return {
+    id: row.id,
+    itemId: row.item_id,
+    itemTitulo: row.item_titulo,
+    nome: row.nome,
+    motivo: row.motivo,
+    excluidoEm: row.excluido_em,
   };
 }

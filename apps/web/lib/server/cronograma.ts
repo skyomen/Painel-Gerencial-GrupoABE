@@ -17,6 +17,7 @@ export interface CronogramaItemRow {
   escopo: string;
   status: CronogramaStatus;
   ordem: number | null;
+  numero: number;
   prioridade_desejada: CronogramaPrioridadeDesejada | null;
   evidencia_commit: string | null;
   motivo_recusa: string | null;
@@ -32,6 +33,7 @@ export interface CronogramaItemDTO {
   escopo: string;
   status: CronogramaStatus;
   ordem: number | null;
+  numero: number;
   prioridadeDesejada: CronogramaPrioridadeDesejada | null;
   evidenciaCommit: string | null;
   atualizadoEm: string;
@@ -47,6 +49,7 @@ export function toCronogramaItemDTO(row: CronogramaItemRow): CronogramaItemDTO {
     escopo: row.escopo,
     status: row.status,
     ordem: row.ordem,
+    numero: row.numero,
     prioridadeDesejada: row.prioridade_desejada,
     evidenciaCommit: row.evidencia_commit,
     atualizadoEm: row.atualizado_em,

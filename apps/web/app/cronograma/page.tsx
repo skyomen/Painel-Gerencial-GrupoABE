@@ -54,11 +54,13 @@ import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
+  pointerWithin,
   PointerSensor,
   useDraggable,
   useDroppable,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
@@ -111,6 +113,38 @@ const PRIORIDADE_DESEJADA_ROTULO: Record<CronogramaPrioridadeDesejada, string> =
 
 /** Colunas do quadro — RECUSADO fica numa seção própria, fora do quadro. */
 const COLUNAS_QUADRO: CronogramaStatus[] = ['FILA', 'EM_EXECUCAO', 'CONCLUIDO'];
+
+/**
+ * Estratégia de colisão do quadro (drag cross-coluna, correção do bug "item
+ * criado na fila não é arrastado para Em desenvolvimento/Concluído").
+ *
+ * Causa raiz confirmada: `closestCenter` sozinho, aplicado globalmente a
+ * TODOS os droppables (as 3 colunas inteiras — bem mais altas que a
+ * viewport — e cada card da FILA), compara distância entre CENTROS. Como o
+ * centro de uma coluna alta fica longe da área onde o usuário solta o card,
+ * e o próprio card arrastado continua registrado como droppable de si mesmo
+ * no seu lugar original (via `useSortable`), o centro mais próximo do card
+ * arrastado é quase sempre o DELE MESMO ou de um vizinho da FILA — nunca a
+ * coluna de destino. Isso batia direto no guard `active.id === over.id` de
+ * `handleFilaDragEnd` (nada acontecia, nem visual nem PATCH) ou virava um
+ * reorder dentro da FILA em vez de mover de coluna. Confirmado medindo os
+ * retângulos reais durante um drag de verdade (Playwright): a distância até
+ * o próprio card (356px) batia o centro da coluna "Em desenvolvimento"
+ * (462px) e o de outro card da FILA (383px) também vencia a coluna.
+ *
+ * Correção = padrão oficial do dnd-kit para múltiplos containers: tenta por
+ * ponteiro primeiro (`pointerWithin` olha o que está literalmente embaixo
+ * do cursor e, entre vários — item dentro de coluna —, prioriza o
+ * retângulo menor/mais específico) e só cai para `closestCenter` quando não
+ * há `pointerCoordinates` (sensor de teclado) ou nenhuma colisão por
+ * ponteiro — mesmo algoritmo de antes nesses casos, sem regressão para
+ * navegação via teclado.
+ */
+function colisaoQuadro(args: Parameters<CollisionDetection>[0]): ReturnType<CollisionDetection> {
+  const colisoesPonteiro = pointerWithin(args);
+  if (colisoesPonteiro.length > 0) return colisoesPonteiro;
+  return closestCenter(args);
+}
 
 const MESES_LONGOS = [
   'janeiro',
@@ -209,7 +243,7 @@ function EvidenciaLink({ item }: { item: CronogramaItem }) {
 }
 
 type View = 'board' | 'timeline' | 'table';
-type SortCol = 'titulo' | 'status' | 'prioridade' | 'atualizadoEm';
+type SortCol = 'numero' | 'titulo' | 'status' | 'prioridade' | 'atualizadoEm';
 
 const VIEW_TABS: { id: View; label: string; icon: typeof LayoutGrid }[] = [
   { id: 'board', label: 'Quadro', icon: LayoutGrid },
@@ -551,6 +585,9 @@ export default function CronogramaPage() {
   const itensOrdenados = useMemo(() => {
     const dir = sortDir === 'asc' ? 1 : -1;
     return [...ativos].sort((a, b) => {
+      if (sortCol === 'numero') {
+        return (a.numero - b.numero) * dir;
+      }
       if (sortCol === 'prioridade') {
         const av = a.prioridade ?? 999;
         const bv = b.prioridade ?? 999;
@@ -723,7 +760,7 @@ export default function CronogramaPage() {
               {view === 'board' && (
                 <DndContext
                   sensors={sensors}
-                  collisionDetection={closestCenter}
+                  collisionDetection={colisaoQuadro}
                   onDragStart={handleFilaDragStart}
                   onDragEnd={handleFilaDragEnd}
                 >
@@ -839,6 +876,13 @@ export default function CronogramaPage() {
                     <thead>
                       <tr className="border-b border-border bg-muted/40 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
                         <SortHeader
+                          label="#"
+                          col="numero"
+                          sortCol={sortCol}
+                          sortDir={sortDir}
+                          onSort={toggleSort}
+                        />
+                        <SortHeader
                           label="Item"
                           col="titulo"
                           sortCol={sortCol}
@@ -873,7 +917,7 @@ export default function CronogramaPage() {
                       {itensOrdenados.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={5}
+                            colSpan={6}
                             className="px-4 py-10 text-center text-xs text-muted-foreground"
                           >
                             Nada por aqui ainda.
@@ -885,6 +929,9 @@ export default function CronogramaPage() {
                             key={item.id}
                             className="border-b border-border last:border-0 hover:bg-muted/40"
                           >
+                            <td className="px-4 py-3 tabular-nums text-muted-foreground">
+                              #{item.numero}
+                            </td>
                             <td className="p-0">
                               <button
                                 type="button"
@@ -992,6 +1039,9 @@ export default function CronogramaPage() {
                 id="cronograma-modal-titulo"
                 className="font-display text-lg font-semibold text-foreground"
               >
+                <span className="mr-2 tabular-nums text-muted-foreground">
+                  #{itemAberto.numero}
+                </span>
                 {itemAberto.titulo}
               </h3>
               <button
@@ -1376,6 +1426,7 @@ function FilaCardConteudo({
           aria-hidden="true"
         />
         <p className="font-display text-[13.5px] font-semibold leading-snug text-foreground">
+          <span className="mr-1 tabular-nums text-muted-foreground/70">#{item.numero}</span>
           {item.titulo}
         </p>
       </div>
@@ -1501,6 +1552,7 @@ function ItemQuadroCard({
               aria-hidden="true"
             />
             <p className="font-display text-[13.5px] font-semibold leading-snug text-foreground">
+              <span className="mr-1 tabular-nums text-muted-foreground/70">#{item.numero}</span>
               {item.titulo}
             </p>
           </div>
@@ -1571,6 +1623,7 @@ function ItemQuadroCardArrastavel({
           aria-hidden="true"
         />
         <p className="font-display text-[13.5px] font-semibold leading-snug text-foreground">
+          <span className="mr-1 tabular-nums text-muted-foreground/70">#{item.numero}</span>
           {item.titulo}
         </p>
       </div>
@@ -1642,6 +1695,9 @@ function TimelineView({
                 <div className="flex-1 pb-6">
                   <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                     <b className="font-display text-[13.5px] font-semibold text-foreground">
+                      <span className="mr-1 tabular-nums text-muted-foreground/70">
+                        #{item.numero}
+                      </span>
                       {item.titulo}
                     </b>
                     <span className="text-[11px] tabular-nums text-muted-foreground">

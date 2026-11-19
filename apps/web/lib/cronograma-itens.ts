@@ -21,6 +21,13 @@ export interface CronogramaItem {
   /** @deprecated Não ordena mais a fila — ver `ordem`. Mantido só por compatibilidade. */
   prioridade?: number;
   ordem?: number | null;
+  /**
+   * Número permanente e crescente para referência humana ("item 20").
+   * Atribuído uma vez na criação (migration 020), nunca reatribuído depois —
+   * só exibição, nunca editável nem recalculado no cliente. Não confundir
+   * com `ordem`, que é a posição visual/arrastável dentro da FILA.
+   */
+  numero: number;
   prioridadeDesejada?: CronogramaPrioridadeDesejada | null;
   evidenciaCommit?: string | null;
   atualizadoEm: string;

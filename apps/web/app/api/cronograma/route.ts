@@ -24,7 +24,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from('cronograma_itens')
     .select(
-      'id, titulo, descricao, escopo, status, ordem, prioridade_desejada, evidencia_commit, motivo_recusa, atualizado_em, criado_em, criado_via_pagina',
+      'id, titulo, descricao, escopo, status, ordem, numero, prioridade_desejada, evidencia_commit, motivo_recusa, atualizado_em, criado_em, criado_via_pagina',
     );
 
   if (error) {

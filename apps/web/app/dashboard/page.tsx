@@ -396,7 +396,7 @@ function DashboardContent() {
           <FaixaIdadeChart dados={dados.faixaIdadeComparativo} />
 
           {/* Tabelas acordos + baixas */}
-          <section className="grid gap-4 lg:grid-cols-2">
+          <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <AcordosTable linhas={dados.tabelaAcordos} />
             <BaixasTable linhas={dados.tabelaBaixas} />
           </section>

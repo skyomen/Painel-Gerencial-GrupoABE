@@ -181,7 +181,7 @@ export default function DiretoriaPage() {
 
       <FaixaIdadeChart dados={dados.faixaIdadeComparativo} />
 
-      <section className="grid gap-4 lg:grid-cols-2">
+      <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <AcordosTable linhas={dados.tabelaAcordos} />
         <BaixasTable linhas={dados.tabelaBaixas} />
       </section>

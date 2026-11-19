@@ -1344,7 +1344,7 @@ export default function CronogramaPage() {
                   id="add-escopo"
                   value={addEscopo}
                   onChange={(e) => setAddEscopo(e.target.value)}
-                  placeholder="O que é a tarefa e como deve ser feita — aparece no modal do item depois de criado."
+                  placeholder="O que é a tarefa e como deve ser feita. Digite pelo menos 30 caracteres para poder usar o Escopar com IA."
                   className="min-h-[4.5rem] w-full resize-y rounded-xl border border-input bg-card px-3 py-2.5 text-sm text-foreground focus:border-primary/60 focus:outline-none"
                 />
                 <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -1361,12 +1361,6 @@ export default function CronogramaPage() {
                     )}
                     {escoparIaEnviando ? 'Gerando escopo...' : 'Escopar com IA'}
                   </button>
-                  {!escoparIaHabilitado && !escoparIaEnviando && (
-                    <span className="text-[11px] text-muted-foreground">
-                      Preencha título, descrição e pelo menos {MIN_CARACTERES_ESCOPO_IA} caracteres
-                      no escopo para usar a IA.
-                    </span>
-                  )}
                 </div>
                 {escoparIaErro && (
                   <p className="mt-2 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
